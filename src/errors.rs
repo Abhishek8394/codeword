@@ -1,13 +1,15 @@
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct InvalidError{
-    msg: String
+pub struct InvalidError {
+    msg: String,
 }
 
-impl InvalidError{
-    pub fn new(msg: &str) -> Self{
-        return InvalidError{msg: String::from(msg)}
+impl InvalidError {
+    pub fn new(msg: &str) -> Self {
+        return InvalidError {
+            msg: String::from(msg),
+        };
     }
 }
 
