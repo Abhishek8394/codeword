@@ -1,4 +1,4 @@
-use crate::errors::InvalidError;
+use crate::errors::{InvalidError, InvalidMoveError};
 
 use rand::prelude::*;
 use rand::thread_rng;
@@ -90,6 +90,21 @@ impl Board {
     pub fn get_team_two_indices_list(&self) -> Vec<usize> {
         return pos_from_bitmap(&self.team_two_indices);
     }
+
+    pub fn is_word_unravelled(&self, idx: usize) -> bool {
+        let m = 1 << idx;
+        self.unraveled_indices & m == m
+    }
+
+    pub fn unravel_word(&mut self, idx: usize) -> Result<(), InvalidMoveError> {
+        if self.is_word_unravelled(idx) {
+            return Err(InvalidMoveError::new(
+                "Trying to unveil already known word.",
+            ));
+        }
+        self.unraveled_indices = self.unraveled_indices | (1 << idx);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -149,6 +164,21 @@ mod tests {
             Board::new(&words).is_err(),
             "Board must error out on invalid sizes"
         );
+    }
+
+    #[test]
+    fn board_unravelling() {
+        let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
+        let mut board = Board::new(&words).unwrap();
+        for i in 0..words.len() {
+            let res = board.unravel_word(i);
+            assert!(res.is_ok());
+            assert!(board.is_word_unravelled(i));
+            // unravelling again should throw.
+            let res = board.unravel_word(i);
+            assert!(res.is_err());
+            assert!(board.is_word_unravelled(i));
+        }
     }
 
     #[test]

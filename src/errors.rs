@@ -18,3 +18,5 @@ impl fmt::Display for InvalidError {
         write!(f, "invalid value: {}", self.msg)
     }
 }
+
+pub type InvalidMoveError = InvalidError;
