@@ -36,6 +36,11 @@ fn num_ones(num: &u32) -> u32 {
     return s;
 }
 
+fn is_bit_set(num: &u32, idx: usize) -> bool {
+    let m = 1 << idx;
+    num & m == m
+}
+
 #[derive(Debug)]
 pub struct Board {
     words: Vec<String>,
@@ -92,8 +97,7 @@ impl Board {
     }
 
     pub fn is_word_unravelled(&self, idx: usize) -> bool {
-        let m = 1 << idx;
-        self.unraveled_indices & m == m
+        is_bit_set(&self.unraveled_indices, idx)
     }
 
     pub fn unravel_word(&mut self, idx: usize) -> Result<(), InvalidMoveError> {
@@ -104,6 +108,26 @@ impl Board {
         }
         self.unraveled_indices = self.unraveled_indices | (1 << idx);
         Ok(())
+    }
+
+    pub fn has_hidden_tiles(&self) -> bool {
+        !(((1 << self.danger_index) | self.unraveled_indices) == 0x01FFFFFF)
+    }
+
+    pub fn get_team_one_pending_size(&self) -> u32 {
+        num_ones(&(self.team_one_indices ^ self.unraveled_indices & self.team_one_indices))
+    }
+
+    pub fn get_team_two_pending_size(&self) -> u32 {
+        num_ones(&(self.team_two_indices ^ self.unraveled_indices & self.team_two_indices))
+    }
+
+    pub fn is_team_one_index(&self, idx: usize) -> bool {
+        is_bit_set(&self.team_one_indices, idx)
+    }
+
+    pub fn is_team_two_index(&self, idx: usize) -> bool {
+        is_bit_set(&self.team_two_indices, idx)
     }
 }
 
@@ -182,6 +206,20 @@ mod tests {
     }
 
     #[test]
+    fn test_board_has_hidden_tiles() {
+        let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
+        let mut board = Board::new(&words).unwrap();
+        assert!(board.has_hidden_tiles());
+        for i in 0..words.len() {
+            if i as u8 != board.danger_index {
+                let res = board.unravel_word(i);
+                assert!(res.is_ok());
+            }
+        }
+        assert!(!board.has_hidden_tiles());
+    }
+
+    #[test]
     fn test_bitmap_for_pos() {
         let test_cases: Vec<(Vec<usize>, u32)> = vec![
             (vec![], 0),
@@ -216,5 +254,42 @@ mod tests {
             let ans = num_ones(inp);
             assert_eq!(ans, *out, "Error in test: {}", i);
         }
+    }
+
+    #[test]
+    fn test_board_get_team_pending_size() {
+        let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
+        let mut board = Board::new(&words).unwrap();
+        let mut exp_t1_psize = 8;
+        let mut exp_t2_psize = 8;
+        assert_eq!(board.get_team_one_pending_size(), exp_t1_psize);
+        assert_eq!(board.get_team_two_pending_size(), exp_t2_psize);
+
+        for i in 0..words.len() {
+            if i != board.danger_index as usize {
+                let res = board.unravel_word(i);
+                assert!(res.is_ok());
+                if board.is_team_one_index(i) {
+                    exp_t1_psize -= 1;
+                    assert_eq!(
+                        board.get_team_one_pending_size(),
+                        exp_t1_psize,
+                        "problem in idx: {}",
+                        i
+                    );
+                }
+                if board.is_team_two_index(i) {
+                    exp_t2_psize -= 1;
+                    assert_eq!(
+                        board.get_team_two_pending_size(),
+                        exp_t2_psize,
+                        "problem in idx: {}",
+                        i
+                    );
+                }
+            }
+        }
+        assert_eq!(board.get_team_one_pending_size(), 0);
+        assert_eq!(board.get_team_two_pending_size(), 0);
     }
 }

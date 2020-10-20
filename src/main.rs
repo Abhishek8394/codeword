@@ -1,5 +1,6 @@
 mod board;
 mod errors;
+mod game;
 
 use crate::board::Board;
 
