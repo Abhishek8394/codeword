@@ -1,6 +1,7 @@
 use crate::errors::InvalidError;
-use rand::seq::index::sample;
+
 use rand::thread_rng;
+use rand::prelude::*;
 
 fn bitmap_for_pos(pos_list: &[usize]) -> Result<u32, InvalidError> {
     let mut bm: u32 = 0;
@@ -13,6 +14,26 @@ fn bitmap_for_pos(pos_list: &[usize]) -> Result<u32, InvalidError> {
         bm = bm | (1 << pos);
     }
     return Ok(bm);
+}
+
+fn pos_from_bitmap(bitmap: &u32) -> Vec<usize>{
+    let mut res: Vec<usize> = Vec::new();
+    for i in 0..32{
+        if bitmap & (1 << i) != 0{
+            res.push(i);
+        }
+    }
+    return res;
+}
+
+fn num_ones(num: &u32) -> u32{
+    let mut x: u32 = *num;
+    let mut s = 0;
+    for _ in 0..32{
+        s += x & 1;
+        x = x>>1;
+    }
+    return s;
 }
 
 #[derive(Debug)]
@@ -30,15 +51,25 @@ impl Board {
         if vocab.len() != 25 {
             return Err(InvalidError::new("Vocab must be 25 words"));
         }
+        // shuffle words
         let mut rng = thread_rng();
-        let num_grey = 7;
-        let danger_and_grey = sample(&mut rng, vocab.len(), num_grey + 1).into_vec();
+        let mut indices: Vec<usize> = (0..vocab.len()).collect();
+        indices.shuffle(&mut rng);
+        // 1/3 partitions.
+        let num_team_one = (vocab.len() / 3) as usize;
+        let num_team_two = num_team_one;
+        let num_grey: usize = vocab.len() - num_team_two - num_team_one;
+        // get data.
+        let grey = &indices[0..num_grey];
+        let team_one = &indices[num_grey..(num_grey + num_team_one)];
+        let team_two = &indices[(num_grey + num_team_one)..];
+        // 
         let board = Board {
             words: vocab.iter().map(|x| String::from(x)).collect(),
-            danger_index: danger_and_grey[0] as u8,
-            grey_indices: bitmap_for_pos(&danger_and_grey[1..])?,
-            team_one_indices: 0,
-            team_two_indices: 0,
+            danger_index: grey[0] as u8,
+            grey_indices: bitmap_for_pos(&grey[1..])?,
+            team_one_indices: bitmap_for_pos(&team_one[..])?,
+            team_two_indices: bitmap_for_pos(&team_two[..])?,
             unraveled_indices: 0,
         };
         Ok(board)
@@ -58,6 +89,40 @@ mod tests {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
         let board = Board::new(&words).unwrap();
         assert_eq!(board.words().len(), 25);
+        assert_eq!(num_ones(&board.grey_indices), 8);
+        assert_eq!(num_ones(&board.team_one_indices), 8);
+        assert_eq!(num_ones(&board.team_two_indices), 8);
+    }
+
+    #[test]
+    fn test_board_vocab_matches_indices() {
+        let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
+        let board = Board::new(&words).unwrap();
+        let grey_list = pos_from_bitmap(&board.grey_indices);
+        let team_one_list = pos_from_bitmap(&board.team_one_indices);
+        let team_two_list = pos_from_bitmap(&board.team_two_indices);
+
+        let mut seen = [false; 25];
+        seen[board.danger_index as usize] = true;
+
+        // make sure all inds are unique.
+        for (name, list) in [("grey_list", grey_list), ("team_one_list", team_one_list), ("team_two_list", team_two_list)].iter(){
+            for (i, item) in list.iter().enumerate(){
+                assert!(!seen[*item], "{} has dup item {} at {}", name, item, i);
+                seen[*item] = true;
+            }
+        }
+
+        // make sure all inds are used.
+        for i in 0..seen.len(){
+            assert!(seen[i], "{} index was not used anywhere", i);
+        }
+
+        // make sure vocab ordering is intact.
+        for (i, word) in board.words.iter().enumerate(){
+            assert_eq!(word, &words[i], "words dont match at: {}", i);
+        }
+
     }
 
     #[test]
@@ -91,6 +156,18 @@ mod tests {
         for (i, test) in test_cases.iter().enumerate() {
             let ans = bitmap_for_pos(&test[..]);
             assert!(ans.is_err(), "Test: {} should have failed", i);
+        }
+    }
+
+    #[test]
+    fn test_num_ones(){
+        // inp, out
+        let test_cases: Vec<(u32, u32)> = vec![
+            (0, 0), (1, 1), (2, 1), (5, 2), (0xFFFFFFFF, 32), (7, 3)];
+        for (i, test) in test_cases.iter().enumerate(){
+            let (inp, out) = test;
+            let ans = num_ones(inp);
+            assert_eq!(ans, *out, "Error in test: {}", i);
         }
     }
 }
