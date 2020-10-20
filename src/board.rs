@@ -1,7 +1,7 @@
 use crate::errors::InvalidError;
 
-use rand::thread_rng;
 use rand::prelude::*;
+use rand::thread_rng;
 
 fn bitmap_for_pos(pos_list: &[usize]) -> Result<u32, InvalidError> {
     let mut bm: u32 = 0;
@@ -16,22 +16,22 @@ fn bitmap_for_pos(pos_list: &[usize]) -> Result<u32, InvalidError> {
     return Ok(bm);
 }
 
-fn pos_from_bitmap(bitmap: &u32) -> Vec<usize>{
+fn pos_from_bitmap(bitmap: &u32) -> Vec<usize> {
     let mut res: Vec<usize> = Vec::new();
-    for i in 0..32{
-        if bitmap & (1 << i) != 0{
+    for i in 0..32 {
+        if bitmap & (1 << i) != 0 {
             res.push(i);
         }
     }
     return res;
 }
 
-fn num_ones(num: &u32) -> u32{
+fn num_ones(num: &u32) -> u32 {
     let mut x: u32 = *num;
     let mut s = 0;
-    for _ in 0..32{
+    for _ in 0..32 {
         s += x & 1;
-        x = x>>1;
+        x = x >> 1;
     }
     return s;
 }
@@ -63,7 +63,7 @@ impl Board {
         let grey = &indices[0..num_grey];
         let team_one = &indices[num_grey..(num_grey + num_team_one)];
         let team_two = &indices[(num_grey + num_team_one)..];
-        // 
+        //
         let board = Board {
             words: vocab.iter().map(|x| String::from(x)).collect(),
             danger_index: grey[0] as u8,
@@ -77,6 +77,18 @@ impl Board {
 
     pub fn words(&self) -> &Vec<String> {
         &self.words
+    }
+
+    pub fn get_grey_indices_list(&self) -> Vec<usize> {
+        return pos_from_bitmap(&self.grey_indices);
+    }
+
+    pub fn get_team_one_indices_list(&self) -> Vec<usize> {
+        return pos_from_bitmap(&self.team_one_indices);
+    }
+
+    pub fn get_team_two_indices_list(&self) -> Vec<usize> {
+        return pos_from_bitmap(&self.team_two_indices);
     }
 }
 
@@ -98,31 +110,36 @@ mod tests {
     fn test_board_vocab_matches_indices() {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
         let board = Board::new(&words).unwrap();
-        let grey_list = pos_from_bitmap(&board.grey_indices);
-        let team_one_list = pos_from_bitmap(&board.team_one_indices);
-        let team_two_list = pos_from_bitmap(&board.team_two_indices);
+        let grey_list = board.get_grey_indices_list();
+        let team_one_list = board.get_team_one_indices_list();
+        let team_two_list = board.get_team_two_indices_list();
 
         let mut seen = [false; 25];
         seen[board.danger_index as usize] = true;
 
         // make sure all inds are unique.
-        for (name, list) in [("grey_list", grey_list), ("team_one_list", team_one_list), ("team_two_list", team_two_list)].iter(){
-            for (i, item) in list.iter().enumerate(){
+        for (name, list) in [
+            ("grey_list", grey_list),
+            ("team_one_list", team_one_list),
+            ("team_two_list", team_two_list),
+        ]
+        .iter()
+        {
+            for (i, item) in list.iter().enumerate() {
                 assert!(!seen[*item], "{} has dup item {} at {}", name, item, i);
                 seen[*item] = true;
             }
         }
 
         // make sure all inds are used.
-        for i in 0..seen.len(){
+        for i in 0..seen.len() {
             assert!(seen[i], "{} index was not used anywhere", i);
         }
 
         // make sure vocab ordering is intact.
-        for (i, word) in board.words.iter().enumerate(){
+        for (i, word) in board.words.iter().enumerate() {
             assert_eq!(word, &words[i], "words dont match at: {}", i);
         }
-
     }
 
     #[test]
@@ -160,11 +177,11 @@ mod tests {
     }
 
     #[test]
-    fn test_num_ones(){
+    fn test_num_ones() {
         // inp, out
-        let test_cases: Vec<(u32, u32)> = vec![
-            (0, 0), (1, 1), (2, 1), (5, 2), (0xFFFFFFFF, 32), (7, 3)];
-        for (i, test) in test_cases.iter().enumerate(){
+        let test_cases: Vec<(u32, u32)> =
+            vec![(0, 0), (1, 1), (2, 1), (5, 2), (0xFFFFFFFF, 32), (7, 3)];
+        for (i, test) in test_cases.iter().enumerate() {
             let (inp, out) = test;
             let ans = num_ones(inp);
             assert_eq!(ans, *out, "Error in test: {}", i);
