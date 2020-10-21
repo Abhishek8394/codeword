@@ -1,6 +1,7 @@
 mod board;
 mod errors;
 mod game;
+mod players;
 
 use crate::board::Board;
 
