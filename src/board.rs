@@ -96,6 +96,10 @@ impl Board {
         return pos_from_bitmap(&self.team_two_indices);
     }
 
+    pub fn danger_index(&self) -> u8 {
+        self.danger_index
+    }
+
     pub fn is_word_unravelled(&self, idx: usize) -> bool {
         is_bit_set(&self.unraveled_indices, idx)
     }
@@ -128,6 +132,10 @@ impl Board {
 
     pub fn is_team_two_index(&self, idx: usize) -> bool {
         is_bit_set(&self.team_two_indices, idx)
+    }
+
+    pub fn is_grey_index(&self, idx: usize) -> bool {
+        is_bit_set(&self.grey_indices, idx)
     }
 }
 
@@ -278,7 +286,7 @@ mod tests {
                         i
                     );
                 }
-                if board.is_team_two_index(i) {
+                else if board.is_team_two_index(i) {
                     exp_t2_psize -= 1;
                     assert_eq!(
                         board.get_team_two_pending_size(),
@@ -287,9 +295,13 @@ mod tests {
                         i
                     );
                 }
+                else {
+                    assert!(board.is_grey_index(i));
+                }
             }
         }
         assert_eq!(board.get_team_one_pending_size(), 0);
         assert_eq!(board.get_team_two_pending_size(), 0);
     }
+
 }
