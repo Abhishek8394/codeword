@@ -4,7 +4,7 @@ use crate::players::Player;
 use std::convert::TryInto;
 
 #[derive(Debug)]
-pub struct GameCore<S, P: Player> {
+pub struct Game<S, P: Player> {
     board: Board,
     team_one_players: Vec<P>,
     team_two_players: Vec<P>,
@@ -17,17 +17,17 @@ pub struct GameCore<S, P: Player> {
 }
 
 pub struct InitialGame{
-    // game: GameCore<P>,
+    // game: Game<P>,
 }
 
 pub struct InProgressGame/*<P: Player>*/ {
-    // game: GameCore<P>,
+    // game: Game<P>,
 }
 
-impl<P: Player> GameCore<InitialGame, P> {
+impl<P: Player> Game<InitialGame, P> {
     pub fn new(vocab: &Vec<String>) -> Result<Self, InvalidError> {
         let board = Board::new(vocab)?;
-        let mut game = GameCore {
+        let mut game = Game {
             board,
             team_one_players: Vec::new(),
             team_two_players: Vec::new(),
@@ -84,10 +84,10 @@ impl<P: Player> GameCore<InitialGame, P> {
         self.has_enough_players()
     }
 
-    pub fn begin(self) -> Result<GameCore<InProgressGame, P>, InvalidError> {
+    pub fn begin(self) -> Result<Game<InProgressGame, P>, InvalidError> {
         if self.can_begin() {
             // return (None, Ok(InProgressGame { game: self.game }));
-            let game = GameCore::<InProgressGame, P>::from(self);
+            let game = Game::<InProgressGame, P>::from(self);
             return Ok(game);
         }
         return 
@@ -97,9 +97,9 @@ impl<P: Player> GameCore<InitialGame, P> {
     }
 }
 
-impl<P: Player> From<GameCore<InitialGame, P>> for GameCore<InProgressGame, P>{
-    fn from (value: GameCore<InitialGame, P>) -> GameCore<InProgressGame, P>{
-        GameCore{
+impl<P: Player> From<Game<InitialGame, P>> for Game<InProgressGame, P>{
+    fn from (value: Game<InitialGame, P>) -> Game<InProgressGame, P>{
+        Game{
             state: InProgressGame{},
             board: value.board,
             team_one_players: value.team_one_players,
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn new_game_core() -> Result<(), InvalidError> {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
-        let mut game: GameCore<InitialGame, SimplePlayer> = GameCore::new(&words)?;
+        let mut game: Game<InitialGame, SimplePlayer> = Game::new(&words)?;
 
         assert_eq!(game.get_team_one_score(), 8);
         assert_eq!(game.get_team_two_score(), 8);
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn test_begin_game() -> Result<(), InvalidError> {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
-        let mut game = GameCore::new(&words)?;
+        let mut game = Game::new(&words)?;
 
         assert_eq!(game.get_team_one_score(), 8);
         assert_eq!(game.get_team_two_score(), 8);
@@ -163,14 +163,14 @@ mod tests {
         assert!(game.can_begin());
         let res = game.begin();
         assert!(res.is_ok());
-        let _game: GameCore<InProgressGame, SimplePlayer> = res.unwrap();
+        let _game: Game<InProgressGame, SimplePlayer> = res.unwrap();
         Ok(())
     }
 
     #[test]
     fn test_has_enough_players_core() -> Result<(), InvalidError> {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
-        let mut game: GameCore<InitialGame, SimplePlayer> = GameCore::new(&words)?;
+        let mut game: Game<InitialGame, SimplePlayer> = Game::new(&words)?;
         game.add_player_team_one(SimplePlayer::new("p1"));
         game.add_player_team_two(SimplePlayer::new("p2"));
         assert!(
