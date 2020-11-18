@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 
 #[derive(Debug, PartialEq)]
-pub enum Team{
+pub enum Team {
     TeamOne,
-    TeamTwo
+    TeamTwo,
 }
 
 #[derive(Debug)]
@@ -66,14 +66,12 @@ impl<S, P: Player> Game<S, P> {
         Ok(())
     }
 
-    pub fn get_player_team(&self, player: &P) -> Option<Team>{
-        if self.team_one_players.contains_key(player.get_id()){
+    pub fn get_player_team(&self, player: &P) -> Option<Team> {
+        if self.team_one_players.contains_key(player.get_id()) {
             Some(Team::TeamOne)
-        }
-        else if self.team_two_players.contains_key(player.get_id()) {
+        } else if self.team_two_players.contains_key(player.get_id()) {
             Some(Team::TeamTwo)
-        }
-        else{
+        } else {
             None
         }
     }
@@ -133,36 +131,39 @@ impl<P: Player> From<Game<InitialGame, P>> for Game<InProgressGame, P> {
 
 impl<P: Player> Game<InProgressGame, P> {
     pub fn try_unravel(&mut self, player: &P, tile_id: u8) -> Result<(), InvalidMoveError> {
-        let team_num = match self.get_player_team(player){
+        let team_num = match self.get_player_team(player) {
             Some(team) => team,
-            None => {return Err(InvalidMoveError::new("Player not in the team"));}
+            None => {
+                return Err(InvalidMoveError::new("Player not in the team"));
+            }
         };
-        if team_num == *self.next_turn.as_ref().unwrap(){
+        if team_num == *self.next_turn.as_ref().unwrap() {
             match self.board.unravel_word(tile_id as usize) {
                 Ok(_) => {
-                    if tile_id == self.board.danger_index(){
+                    if tile_id == self.board.danger_index() {
                         // handle Game Over.
-                    }
-                    else if self.board.is_grey_index(tile_id.into()) {
+                    } else if self.board.is_grey_index(tile_id.into()) {
                         // handle grey tile
-                    }
-                    else if self.board.is_team_one_index(tile_id.into()) &&  team_num == Team::TeamOne {
-                        self.team_one_score = self.board.get_team_one_pending_size().try_into().unwrap();
-                    }
-                    else if self.board.is_team_two_index(tile_id.into()) &&  team_num == Team::TeamTwo {
-                        self.team_two_score = self.board.get_team_two_pending_size().try_into().unwrap();
-                    }
-                    else{
+                    } else if self.board.is_team_one_index(tile_id.into())
+                        && team_num == Team::TeamOne
+                    {
+                        self.team_one_score =
+                            self.board.get_team_one_pending_size().try_into().unwrap();
+                    } else if self.board.is_team_two_index(tile_id.into())
+                        && team_num == Team::TeamTwo
+                    {
+                        self.team_two_score =
+                            self.board.get_team_two_pending_size().try_into().unwrap();
+                    } else {
                         // This should be unreachable but covers future changes.
                         return Err(InvalidMoveError::new(
-                            format!("Couldn't update score for unravelling: {}", tile_id).as_ref())
-                        );
+                            format!("Couldn't update score for unravelling: {}", tile_id).as_ref(),
+                        ));
                     }
-
-                },
-             Err(e) => {
-                return Err(InvalidMoveError::new(format!("{:?}", e).as_ref()));
-             }
+                }
+                Err(e) => {
+                    return Err(InvalidMoveError::new(format!("{:?}", e).as_ref()));
+                }
             }
             return Ok(());
         }
@@ -175,7 +176,7 @@ mod tests {
     use super::*;
     use crate::players::SimplePlayer;
 
-    fn setup_valid_game() -> Result<Game<InitialGame, SimplePlayer>, InvalidError>{
+    fn setup_valid_game() -> Result<Game<InitialGame, SimplePlayer>, InvalidError> {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
         let mut game = Game::new(&words)?;
 

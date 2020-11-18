@@ -285,8 +285,7 @@ mod tests {
                         "problem in idx: {}",
                         i
                     );
-                }
-                else if board.is_team_two_index(i) {
+                } else if board.is_team_two_index(i) {
                     exp_t2_psize -= 1;
                     assert_eq!(
                         board.get_team_two_pending_size(),
@@ -294,8 +293,7 @@ mod tests {
                         "problem in idx: {}",
                         i
                     );
-                }
-                else {
+                } else {
                     assert!(board.is_grey_index(i));
                 }
             }
@@ -303,5 +301,4 @@ mod tests {
         assert_eq!(board.get_team_one_pending_size(), 0);
         assert_eq!(board.get_team_two_pending_size(), 0);
     }
-
 }
