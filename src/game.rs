@@ -4,10 +4,24 @@ use crate::players::Player;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
+static TARGET_SCORE: u8 = 0;
+
 #[derive(Debug, PartialEq)]
 pub enum Team {
     TeamOne,
     TeamTwo,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum WinReason {
+    ScoreReached,
+    OpponentDangerDraw,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum MoveResult {
+    Win(Team, WinReason),
+    Continue,
 }
 
 #[derive(Debug)]
@@ -130,34 +144,51 @@ impl<P: Player> From<Game<InitialGame, P>> for Game<InProgressGame, P> {
 }
 
 impl<P: Player> Game<InProgressGame, P> {
-    pub fn try_unravel(&mut self, player: &P, tile_id: u8) -> Result<(), InvalidMoveError> {
+    pub fn try_unravel(&mut self, player: &P, tile_id: u8) -> Result<MoveResult, InvalidMoveError> {
         let team_num = match self.get_player_team(player) {
             Some(team) => team,
             None => {
                 return Err(InvalidMoveError::new("Player not in the team"));
             }
         };
+
+        let mut move_result: MoveResult = MoveResult::Continue;
+
         if team_num == *self.next_turn.as_ref().unwrap() {
             match self.board.unravel_word(tile_id as usize) {
                 Ok(_) => {
                     if tile_id == self.board.danger_index() {
                         // handle Game Over.
+                        let win_team = if team_num == Team::TeamOne {
+                            Team::TeamTwo
+                        } else {
+                            Team::TeamOne
+                        };
+                        move_result = MoveResult::Win(win_team, WinReason::OpponentDangerDraw);
                     } else if self.board.is_grey_index(tile_id.into()) {
                         // handle grey tile
-                    } else if self.board.is_team_one_index(tile_id.into())
-                        && team_num == Team::TeamOne
-                    {
-                        self.team_one_score =
-                            self.board.get_team_one_pending_size().try_into().unwrap();
-                    } else if self.board.is_team_two_index(tile_id.into())
-                        && team_num == Team::TeamTwo
-                    {
-                        self.team_two_score =
-                            self.board.get_team_two_pending_size().try_into().unwrap();
+                        if team_num == Team::TeamOne {
+                            self.next_turn = Some(Team::TeamTwo);
+                        } else if team_num == Team::TeamTwo {
+                            self.next_turn = Some(Team::TeamOne);
+                        } else {
+                            panic!("unreachable code reached! No team to update for grey tile.");
+                        }
+                    } else if self.board.is_team_one_index(tile_id.into()) {
+                        if team_num == Team::TeamTwo {
+                            // team one guessed wrong.
+                            self.next_turn = Some(Team::TeamTwo);
+                        }
+                    } else if self.board.is_team_two_index(tile_id.into()) {
+                        if team_num == Team::TeamOne {
+                            // team two guessed wrong.
+                            self.next_turn = Some(Team::TeamTwo);
+                        }
                     } else {
                         // This should be unreachable but covers future changes.
                         return Err(InvalidMoveError::new(
-                            format!("Couldn't update score for unravelling: {}", tile_id).as_ref(),
+                            format!("Couldn't update score for unravelling: {}\n", tile_id)
+                                .as_ref(),
                         ));
                     }
                 }
@@ -165,7 +196,18 @@ impl<P: Player> Game<InProgressGame, P> {
                     return Err(InvalidMoveError::new(format!("{:?}", e).as_ref()));
                 }
             }
-            return Ok(());
+
+            self.team_one_score = self.board.get_team_one_pending_size().try_into().unwrap();
+            self.team_two_score = self.board.get_team_two_pending_size().try_into().unwrap();
+
+            if self.team_one_score == TARGET_SCORE {
+                move_result = MoveResult::Win(Team::TeamOne, WinReason::ScoreReached);
+            }
+
+            if self.team_two_score == TARGET_SCORE {
+                move_result = MoveResult::Win(Team::TeamTwo, WinReason::ScoreReached);
+            }
+            return Ok(move_result);
         }
         return Err(InvalidMoveError::new("Not the current team's turn"));
     }
@@ -195,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn game_move_tracking() -> Result<(), InvalidError> {
+    fn game_move_team_tracking() -> Result<(), InvalidError> {
         let game = setup_valid_game()?;
         let mut game = game.begin()?;
         assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
@@ -209,7 +251,101 @@ mod tests {
         assert!(res.is_err());
         let res = game.try_unravel(&p1, safe_move);
         assert!(res.is_ok());
+        Ok(())
+    }
 
+    #[test]
+    fn game_move_danger_open() -> Result<(), InvalidError> {
+        let game = setup_valid_game()?;
+        let mut game = game.begin()?;
+        assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
+        // maybe player changed their name.
+        let p1 = SimplePlayer::new("p-whatever", 1);
+        assert_eq!(game.get_player_team(&p1).unwrap(), Team::TeamOne);
+        let res = game.try_unravel(&p1, game.board.danger_index());
+        assert!(res.is_ok());
+        assert_eq!(
+            res.unwrap(),
+            MoveResult::Win(Team::TeamTwo, WinReason::OpponentDangerDraw)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn game_move_grey_open() -> Result<(), InvalidError> {
+        let game = setup_valid_game()?;
+        let mut game = game.begin()?;
+        assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
+        // maybe player changed their name.
+        let p1 = SimplePlayer::new("p-whatever", 1);
+        assert_eq!(game.get_player_team(&p1).unwrap(), Team::TeamOne);
+        let grey_moves: Vec<usize> = (0..game.board.words().len())
+            .filter(|x| game.board.is_grey_index(*x))
+            .collect();
+        let res = game.try_unravel(&p1, grey_moves[0] as u8);
+        assert!(res.is_ok());
+        assert_eq!(game.next_turn.unwrap(), Team::TeamTwo);
+        Ok(())
+    }
+
+    #[test]
+    fn game_move_correct_incorrect_open() -> Result<(), InvalidError> {
+        let game = setup_valid_game()?;
+        let mut game = game.begin()?;
+        assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
+        // maybe player changed their name.
+        let p1 = SimplePlayer::new("p-whatever", 1);
+        assert_eq!(game.get_player_team(&p1).unwrap(), Team::TeamOne);
+        let t1_safe_moves: Vec<usize> = (0..game.board.words().len())
+            .filter(|x| game.board.is_team_one_index(*x))
+            .collect();
+        let t2_safe_moves: Vec<usize> = (0..game.board.words().len())
+            .filter(|x| game.board.is_team_two_index(*x))
+            .collect();
+        // open team-1 slot. Still team-1 turn. Team-1 score gets closer to target by 1.
+        let old_t1_score = game.get_team_one_score();
+        let old_t2_score = game.get_team_two_score();
+        let res = game.try_unravel(&p1, t1_safe_moves[0].try_into().unwrap());
+        assert!(res.is_ok());
+        assert_eq!(game.next_turn.as_ref().unwrap(), &Team::TeamOne);
+        assert_eq!(old_t1_score - 1, game.get_team_one_score());
+        assert_eq!(old_t2_score, game.get_team_two_score());
+        // open team-2 slot. Then team-2 turn. Team-2 score gets closer to target by 1.
+        let old_t1_score = game.get_team_one_score();
+        let old_t2_score = game.get_team_two_score();
+        let res = game.try_unravel(&p1, t2_safe_moves[0].try_into().unwrap());
+        assert!(res.is_ok());
+        assert_eq!(game.next_turn.as_ref().unwrap(), &Team::TeamTwo);
+        assert_eq!(old_t1_score, game.get_team_one_score());
+        assert_eq!(old_t2_score - 1, game.get_team_two_score());
+        Ok(())
+    }
+
+    #[test]
+    fn game_winning() -> Result<(), InvalidError> {
+        let game = setup_valid_game()?;
+        let mut game = game.begin()?;
+        assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
+        // maybe player changed their name.
+        let p1 = SimplePlayer::new("p-whatever", 1);
+        assert_eq!(game.get_player_team(&p1).unwrap(), Team::TeamOne);
+        let t1_safe_moves: Vec<usize> = (0..game.board.words().len())
+            .filter(|x| game.board.is_team_one_index(*x))
+            .collect();
+        let mut res = Ok(MoveResult::Continue);
+        for (i, safe_move) in t1_safe_moves.iter().enumerate() {
+            res = game.try_unravel(&p1, *safe_move as u8);
+            assert!(res.is_ok());
+            if i + 1 < t1_safe_moves.len() {
+                assert_eq!(res.as_ref().unwrap(), &MoveResult::Continue);
+            }
+            assert_eq!(game.next_turn.as_ref().unwrap(), &Team::TeamOne);
+        }
+        assert_eq!(0, game.get_team_one_score());
+        assert_eq!(
+            res.unwrap(),
+            MoveResult::Win(Team::TeamOne, WinReason::ScoreReached)
+        );
         Ok(())
     }
 
