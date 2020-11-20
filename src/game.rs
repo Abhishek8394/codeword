@@ -37,8 +37,10 @@ pub struct Game<S, P: Player> {
     state: S,
 }
 
+#[derive(Debug)]
 pub struct InitialGame {}
 
+#[derive(Debug)]
 pub struct InProgressGame {}
 
 impl<S, P: Player> Game<S, P> {

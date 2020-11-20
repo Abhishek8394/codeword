@@ -108,6 +108,7 @@ name = "codeword"
 version = "0.1.0"
 dependencies = [
  "rand 0.7.3",
+ "serde_json",
  "tokio",
  "warp",
 ]
