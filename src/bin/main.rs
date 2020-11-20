@@ -1,9 +1,4 @@
-mod board;
-mod errors;
-mod game;
-mod players;
-
-use crate::board::Board;
+use codeword::board::Board;
 
 fn main() {
     println!("Hello, world!");
