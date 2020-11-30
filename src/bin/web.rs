@@ -17,9 +17,24 @@ pub enum GameWrapper<P: Player>{
     InProgressGame(Game<InProgressGame, P>),
 }
 
+// impl <S, P: Player>GameWrapper<P>{
+//     pub fn get_game(self) -> Game<S, P>{
+//         match self {
+//             GameWrapper::InitialGame(g) => g,
+//             GameWrapper::InProgressGame(g) => g,
+//         }
+//     }
+// }
+
+type ArcGameWrapper<P> = Arc<RwLock<GameWrapper<P>>>;
+
+pub fn get_arc_game_wrapper<P: Player + Clone>(game: GameWrapper<P>) -> ArcGameWrapper<P> {
+    Arc::new(RwLock::new(game))
+}
+
 #[derive(Clone)]
 pub struct GameDB<P: Player + Clone>{
-    db: Arc<RwLock<HashMap<String, GameWrapper<P>>>>
+    db: Arc<RwLock<HashMap<String, ArcGameWrapper<P>>>>
 }
 
 impl<P: Player + Clone> GameDB<P>{
@@ -32,11 +47,31 @@ impl<P: Player + Clone> GameDB<P>{
     }
 
     pub fn add_new_game(&self, game_id: &str, game: GameWrapper<P>) -> Result<()> {
+        eprintln!("Adding game: {}", game_id);
         match self.db.write(){
-            Ok(mut db) => {db.insert(String::from(game_id), game);},
+            Ok(mut db) => {db.insert(String::from(game_id), get_arc_game_wrapper(game));},
             Err(_e) => {bail!("cannot add game now");}
         };
         Ok(())
+    }
+
+    pub fn get_game(&self, game_id: &str) -> Result<ArcGameWrapper<P>> {
+        match self.db.read(){
+            Ok(h_map) => {
+                match h_map.get(game_id){
+                    Some(arc_game) => {
+                        return Ok(arc_game.clone());
+                    },
+                    None => {
+                        bail!(format!("No game found for: {:}", game_id));
+                    }
+                }
+            },
+            Err (e) => {
+                eprintln!("{:?}", e);
+                bail!("Error reading DB")
+            }
+        }
     }
 }
 
@@ -85,14 +120,15 @@ use crate::GameDB;
 
 mod handlers {
     
-    use crate::GameWrapper;
+    use codeword::players::SimplePlayer;
+use crate::GameWrapper;
     use codeword::players::Player;
     use crate::GameDB;
     use codeword::game::Game;
     use codeword::game::InitialGame;
-    use codeword::players::SimplePlayer;
+    
 
-    pub fn generate_game_id<P: Player + Clone>(db: GameDB<P>) -> String{
+    pub fn generate_game_id<P: Player + Clone>(db: &GameDB<P>) -> String{
         String::from("game-") + &(match db.get_num_games(){
             Ok(n) => format!("{}", n),
             Err(_) => String::from("-err")
@@ -101,23 +137,56 @@ mod handlers {
 
     pub fn create_lobby<P: Player + Clone>(db: GameDB<P>) -> String {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
-        let game: Game<InitialGame, SimplePlayer> = match Game::new(&words){
+        let game: Game<InitialGame, P> = match Game::new(&words){
             Ok(g) => {g},
             Err(e) => {
                 eprintln!("Error initializaing game: {:?}", e);
                 return String::from("Couldnt init game;")
             },
         };
-        let game_id = generate_game_id(db);
-        db.add_new_game(&game_id, GameWrapper::InitialGame(game));
-        // let game = db.get_mut_game()
-        // println!("{:?}", game);
-        return String::from("Game ready!");
+        let game_id = generate_game_id(&db);
+        match db.add_new_game(&game_id, GameWrapper::InitialGame(game)){
+            Ok(_) => {return String::from(format!("Game ready!: {}", game_id));},
+            Err(e) => {
+                println!("Error adding game \"{}\" to DB: {:?}", game_id, e);
+                return String::from("Error!");
+            },
+        };
+    }
+
+    pub fn get_player_from_json<P: Player + Clone>(json_data: &str) -> P {
+        let player: P = SimplePlayer::new(json_data.as_ref(), 1);
+        return player;
     }
 
     pub fn create_player<P: Player + Clone>(lobby_id: String, json_data: String, db: GameDB<P>) -> String {
-        println!("Creating player for: {}", lobby_id);
-        println!("Creating player: {}", json_data);
-        return String::from("Player Created!");
+        let arc_game = db.get_game(&lobby_id);
+        let player = get_player_from_json(json_data.as_ref());
+        match arc_game{
+            Ok(game) => {
+                println!("Creating player for: {}", lobby_id);
+                println!("Creating player: {}", json_data);
+                match game.write(){
+                    Ok(g) => {
+                        match *g {
+                            GameWrapper::InitialGame(g0) => {
+                                g0.add_player_team_one(player);
+                            },
+                            GameWrapper::InProgressGame(g0) => {
+                                g0.add_player_team_one(player);
+                            },
+                        };
+                        return String::from("Ok");
+                    },
+                    Err(e) => {
+                        return String::from("Error adding player");
+                    }
+                }
+            },
+            Err(e) => {
+                return String::from("Error adding player");
+            }
+        }
+
     }
 }
