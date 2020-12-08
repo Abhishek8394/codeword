@@ -20,3 +20,5 @@ impl fmt::Display for InvalidError {
 }
 
 pub type InvalidMoveError = InvalidError;
+
+pub type ParseError = InvalidError;
