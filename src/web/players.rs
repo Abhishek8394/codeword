@@ -1,20 +1,30 @@
 use serde::{Serialize, Deserialize};
-
+use std::sync::{Arc, RwLock};
 use crate::players::SimplePlayer;
 use serde::de::DeserializeOwned;
 use crate::players::Player;
 use warp::ws::WebSocket;
 
 
+/// Constraints for players over a remote conn.
 pub trait OnlinePlayer: Player + Clone + DeserializeOwned {}
 
-#[derive(Serialize, Deserialize)]
+/// A connection to player on web
+pub type PlayerConnection = Arc<RwLock<WebSocket>>;
+
+/// A player in context of an web app
+#[derive(Serialize, Deserialize, Clone)]
 pub struct WebAppPlayer{
+    /// Player info
     player: SimplePlayer,
+
+    /// Player channel read connection
     #[serde(skip)]
-    rx: Option<WebSocket>,
+    rx: Option<PlayerConnection>,
+    
+    /// Player channel write connection
     #[serde(skip)]
-    wx: Option<WebSocket>,
+    wx: Option<PlayerConnection>,
 }
 
 impl Player for WebAppPlayer{
@@ -37,6 +47,8 @@ impl WebAppPlayer{
         }
     }
 }
+
+impl OnlinePlayer for WebAppPlayer{}
 
 mod test{
     use super::WebAppPlayer;
