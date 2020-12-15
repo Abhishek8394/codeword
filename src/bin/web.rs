@@ -7,6 +7,7 @@ use codeword::players::SimplePlayer;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use warp::Filter;
+use codeword::web::OnlinePlayer;
 
 use std::sync::{Arc, RwLock};
 // TODO: Global Game cache / db
