@@ -1,10 +1,7 @@
 use super::OnlinePlayer;
 
 #[derive(Clone)]
-pub struct RedisGameDB{
-
-}
-
+pub struct RedisGameDB {}
 
 // #[derive(Clone)]
 // pub struct InMemGameDB<P: OnlinePlayer> {

@@ -4,10 +4,10 @@ use codeword::game::InProgressGame;
 use codeword::game::InitialGame;
 use codeword::players::Player;
 use codeword::players::SimplePlayer;
+use codeword::web::OnlinePlayer;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use warp::Filter;
-use codeword::web::OnlinePlayer;
 
 use std::sync::{Arc, RwLock};
 // TODO: Global Game cache / db
