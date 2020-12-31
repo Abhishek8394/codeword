@@ -10,7 +10,7 @@ use warp::ws::WebSocket;
 type WebSocketStreamItem = Result<Message, warp::Error>;
 
 pub struct PlayerWebSocketConnection {
-    pid: u32,
+    pid: Option<u32>,
     producer: Option<Arc<Mutex<UnboundedSender<WebSocketStreamItem>>>>,
     player_listener: Option<Arc<Mutex<SplitStream<WebSocket>>>>,
 }
@@ -36,10 +36,10 @@ impl Debug for PlayerWebSocketConnection {
 }
 
 impl PlayerWebSocketConnection {
-    pub fn new(player_id: u32, ws: Option<WebSocket>) -> Self {
+    pub fn new(ws: Option<WebSocket>) -> Self {
         let mut pwsc = PlayerWebSocketConnection {
             // sock: None,
-            pid: player_id,
+            pid: None,
             producer: None,
             player_listener: None,
         };
@@ -49,11 +49,42 @@ impl PlayerWebSocketConnection {
         return pwsc;
     }
 
+    pub fn set_player_id(&mut self, pid: u32) -> (){
+        self.pid = Some(pid);
+    }
+
     pub fn set_websocket(&mut self, ws: WebSocket) -> () {
         let (client_ws_sender, client_ws_rcv) = ws.split();
         let (tx, rx) = unbounded();
         tokio::task::spawn(rx.forward(client_ws_sender));
         self.producer = Some(Arc::new(Mutex::new(tx)));
         self.player_listener = Some(Arc::new(Mutex::new(client_ws_rcv)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    use warp::Filter;
+
+    #[tokio::test]
+    async fn test_connection() {
+        let route = warp::ws().map(|ws: warp::ws::Ws| ws.on_upgrade(|websocket| async {
+            let pwsc = PlayerWebSocketConnection::new(Some(websocket));
+            let mut rcvr = pwsc.player_listener.as_ref().unwrap().lock().await;
+            let msg = (*rcvr).next().await.unwrap().unwrap();
+            assert_eq!(Ok("hello"), msg.to_str());
+            let sender = pwsc.producer.as_ref().unwrap().lock().await;
+            (*sender).unbounded_send(Ok(Message::text("world"))).unwrap();
+        }));
+
+        let mut client = warp::test::ws()
+            .handshake(route)
+            .await
+            .expect("handshake");
+        client.send_text("hello").await;
+        let msg = client.recv().await;
+        assert_eq!("world", msg.unwrap().to_str().unwrap());
     }
 }
