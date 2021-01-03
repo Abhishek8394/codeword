@@ -1,10 +1,10 @@
 use crate::web::errors::DuplicateLobbyError;
 use std::collections::HashMap;
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
-use super::lobby::{Lobby};
-use anyhow::{Result, bail};
+use super::lobby::Lobby;
+use anyhow::{bail, Result};
 
 #[derive(Clone)]
 pub struct RedisGameDB {}
@@ -28,7 +28,10 @@ impl InMemGameDB {
         Ok((*r1).len())
     }
 
-    pub async fn add_new_lobby(&self, lobby: Lobby) -> std::result::Result<(), DuplicateLobbyError> {
+    pub async fn add_new_lobby(
+        &self,
+        lobby: Lobby,
+    ) -> std::result::Result<(), DuplicateLobbyError> {
         eprintln!("Adding game lobby: {}", lobby.id);
         let mut w1 = self.db.write().await;
         if let Some(_) = (*w1).get(&lobby.id) {
@@ -42,10 +45,9 @@ impl InMemGameDB {
 
     pub async fn get_lobby(&self, lobby_id: &str) -> Result<ArcLobbyWrapper> {
         let r1 = self.db.read().await;
-        if let Some(lobby) = (*r1).get(lobby_id){
+        if let Some(lobby) = (*r1).get(lobby_id) {
             return Ok(lobby.clone());
-        }
-        else{
+        } else {
             bail!(format!("No lobby found for: {:}", lobby_id));
         }
     }

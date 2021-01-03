@@ -59,24 +59,25 @@ impl PlayerWebSocketConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     use warp::Filter;
 
     #[tokio::test]
     async fn test_connection() {
-        let route = warp::ws().map(|ws: warp::ws::Ws| ws.on_upgrade(|websocket| async {
-            let pwsc = PlayerWebSocketConnection::new(Some(websocket));
-            let mut rcvr = pwsc.player_listener.as_ref().unwrap().lock().await;
-            let msg = (*rcvr).next().await.unwrap().unwrap();
-            assert_eq!(Ok("hello"), msg.to_str());
-            let sender = pwsc.producer.as_ref().unwrap().lock().await;
-            (*sender).unbounded_send(Ok(Message::text("world"))).unwrap();
-        }));
+        let route = warp::ws().map(|ws: warp::ws::Ws| {
+            ws.on_upgrade(|websocket| async {
+                let pwsc = PlayerWebSocketConnection::new(Some(websocket));
+                let mut rcvr = pwsc.player_listener.as_ref().unwrap().lock().await;
+                let msg = (*rcvr).next().await.unwrap().unwrap();
+                assert_eq!(Ok("hello"), msg.to_str());
+                let sender = pwsc.producer.as_ref().unwrap().lock().await;
+                (*sender)
+                    .unbounded_send(Ok(Message::text("world")))
+                    .unwrap();
+            })
+        });
 
-        let mut client = warp::test::ws()
-            .handshake(route)
-            .await
-            .expect("handshake");
+        let mut client = warp::test::ws().handshake(route).await.expect("handshake");
         client.send_text("hello").await;
         let msg = client.recv().await;
         assert_eq!("world", msg.unwrap().to_str().unwrap());
