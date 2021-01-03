@@ -17,13 +17,9 @@ pub struct WebAppPlayer {
     /// Player info
     player: SimplePlayer,
 
-    /// Player channel read connection
+    /// Player channel connection
     #[serde(skip)]
-    rx: Option<PlayerConnection>,
-
-    /// Player channel write connection
-    #[serde(skip)]
-    wx: Option<PlayerConnection>,
+    conn: Option<PlayerConnection>,
 }
 
 impl Player for WebAppPlayer {
@@ -40,8 +36,7 @@ impl WebAppPlayer {
     fn new(name: &str, id: u32) -> Self {
         WebAppPlayer {
             player: SimplePlayer::new(name, id),
-            rx: None,
-            wx: None,
+            conn: None,
         }
     }
 }
@@ -59,7 +54,6 @@ mod test {
         let deser_player: WebAppPlayer = serde_json::from_str(&json_player).unwrap();
         assert_eq!(player.get_id(), deser_player.get_id());
         assert_eq!(player.get_name(), deser_player.get_name());
-        assert!(deser_player.rx.is_none());
-        assert!(deser_player.wx.is_none());
+        assert!(deser_player.conn.is_none());
     }
 }

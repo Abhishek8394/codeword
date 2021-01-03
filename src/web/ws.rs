@@ -10,7 +10,6 @@ use warp::ws::WebSocket;
 type WebSocketStreamItem = Result<Message, warp::Error>;
 
 pub struct PlayerWebSocketConnection {
-    pid: Option<u32>,
     producer: Option<Arc<Mutex<UnboundedSender<WebSocketStreamItem>>>>,
     player_listener: Option<Arc<Mutex<SplitStream<WebSocket>>>>,
 }
@@ -28,8 +27,8 @@ impl Debug for PlayerWebSocketConnection {
             "<CHANNEL SET>"
         };
         let msg = format!(
-            "PlayerWebSocketConnection{{ pid: {:?}, producer: {:?}, player_listener: {:?} }}",
-            self.pid, prod_str, player_listener_str
+            "PlayerWebSocketConnection{{ producer: {:?}, player_listener: {:?} }}",
+            prod_str, player_listener_str
         );
         f.write_str(&msg)
     }
@@ -39,7 +38,6 @@ impl PlayerWebSocketConnection {
     pub fn new(ws: Option<WebSocket>) -> Self {
         let mut pwsc = PlayerWebSocketConnection {
             // sock: None,
-            pid: None,
             producer: None,
             player_listener: None,
         };
@@ -47,10 +45,6 @@ impl PlayerWebSocketConnection {
             pwsc.set_websocket(ws.unwrap());
         }
         return pwsc;
-    }
-
-    pub fn set_player_id(&mut self, pid: u32) -> (){
-        self.pid = Some(pid);
     }
 
     pub fn set_websocket(&mut self, ws: WebSocket) -> () {

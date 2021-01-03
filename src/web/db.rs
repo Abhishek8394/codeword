@@ -1,51 +1,52 @@
-use super::OnlinePlayer;
+use crate::web::errors::DuplicateLobbyError;
+use std::collections::HashMap;
+use tokio::sync::RwLock;
+use std::sync::Arc;
+
+use super::lobby::{Lobby};
+use anyhow::{Result, bail};
 
 #[derive(Clone)]
 pub struct RedisGameDB {}
 
-// #[derive(Clone)]
-// pub struct InMemGameDB<P: OnlinePlayer> {
-//     db: Arc<RwLock<HashMap<String, ArcGameWrapper<P>>>>,
-// }
+type ArcLobbyWrapper = Arc<RwLock<Lobby>>;
 
-// impl<P: OnlinePlayer> InMemGameDB<P> {
-//     pub fn new() -> Self {
-//         GameDB {
-//             db: Arc::new(RwLock::new(HashMap::new())),
-//         }
-//     }
+#[derive(Clone)]
+pub struct InMemGameDB {
+    db: Arc<RwLock<HashMap<String, ArcLobbyWrapper>>>,
+}
 
-//     pub fn get_num_games(&self) -> Result<usize> {
-//         Ok(self.db.read().unwrap().len())
-//     }
+impl InMemGameDB {
+    pub fn new() -> Self {
+        Self {
+            db: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
 
-//     pub fn add_new_game(&self, game_id: &str, game: GameWrapper<P>) -> Result<()> {
-//         eprintln!("Adding game: {}", game_id);
-//         match self.db.write() {
-//             Ok(mut db) => {
-//                 db.insert(String::from(game_id), get_arc_game_wrapper(game));
-//             }
-//             Err(_e) => {
-//                 bail!("cannot add game now");
-//             }
-//         };
-//         Ok(())
-//     }
+    pub async fn get_num_lobbies(&self) -> Result<usize> {
+        let r1 = self.db.read().await;
+        Ok((*r1).len())
+    }
 
-//     pub fn get_game(&self, game_id: &str) -> Result<ArcGameWrapper<P>> {
-//         match self.db.read() {
-//             Ok(h_map) => match h_map.get(game_id) {
-//                 Some(arc_game) => {
-//                     return Ok(arc_game.clone());
-//                 }
-//                 None => {
-//                     bail!(format!("No game found for: {:}", game_id));
-//                 }
-//             },
-//             Err(e) => {
-//                 eprintln!("{:?}", e);
-//                 bail!("Error reading DB")
-//             }
-//         }
-//     }
-// }
+    pub async fn add_new_lobby(&self, lobby: Lobby) -> std::result::Result<(), DuplicateLobbyError> {
+        eprintln!("Adding game lobby: {}", lobby.id);
+        let mut w1 = self.db.write().await;
+        if let Some(_) = (*w1).get(&lobby.id) {
+            let msg = format!("Trying to insert duplicate id: {}", lobby.id);
+            eprintln!("{}", msg);
+            return Err(DuplicateLobbyError::new(&lobby.id));
+        }
+        (*w1).insert(lobby.id.to_string(), Arc::new(RwLock::new(lobby)));
+        Ok(())
+    }
+
+    pub async fn get_lobby(&self, lobby_id: &str) -> Result<ArcLobbyWrapper> {
+        let r1 = self.db.read().await;
+        if let Some(lobby) = (*r1).get(lobby_id){
+            return Ok(lobby.clone());
+        }
+        else{
+            bail!(format!("No lobby found for: {:}", lobby_id));
+        }
+    }
+}
