@@ -15,7 +15,11 @@ pub trait TryDeserialize {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimplePlayer {
+    /// Visible name
     name: String,
+
+    /// Internal ID
+    #[serde(default)]
     id: u32,
 }
 
@@ -26,6 +30,14 @@ impl SimplePlayer {
             id,
         }
     }
+    
+    pub fn set_id(&mut self, id: u32) {
+        self.id = id;
+    }
+
+    pub fn set_name(&mut self, name: &str) {
+        self.name = String::from(name);
+    }
 }
 
 impl Player for SimplePlayer {
@@ -35,6 +47,7 @@ impl Player for SimplePlayer {
     fn get_id(&self) -> &u32 {
         &self.id
     }
+
 }
 
 impl TryDeserialize for SimplePlayer {
@@ -44,5 +57,18 @@ impl TryDeserialize for SimplePlayer {
             return Ok(res.unwrap());
         }
         return Err(ParseError::new("cannot parse"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_partial_simple_player_from_json() {
+        let json_str = "{\"name\": \"foouser\"}";
+        let p: SimplePlayer = serde_json::from_str(json_str).unwrap();
+        assert_eq!(p.name, "foouser");
+        // assert_eq!(p.id, "foouser");
     }
 }

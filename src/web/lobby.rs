@@ -42,4 +42,8 @@ impl Lobby {
     pub fn add_player_id(&mut self, pid: &str) {
         self.player_ids.insert(String::from(pid));
     }
+
+    pub fn get_num_players(&self) -> usize {
+        self.player_ids.len()
+    }
 }

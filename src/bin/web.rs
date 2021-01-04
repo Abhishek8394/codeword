@@ -2,9 +2,6 @@ use codeword::web::db::InMemGameDB;
 use codeword::web::lobby::GameWrapper;
 use warp::Filter;
 
-// TODO: Global Game cache / db
-// TODO: Pass game cache / db down to api handlers
-
 #[tokio::main]
 async fn main() {
     println!("Web App!");
@@ -95,15 +92,18 @@ mod handlers {
 
     pub async fn create_player(
         lobby_id: String,
-        player: SimplePlayer,
+        mut player: SimplePlayer,
         db: InMemGameDB,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         let lobby_res = db.get_lobby(&lobby_id).await;
         if lobby_res.is_err() {
             return Err(warp::reject::not_found());
         }
+
         let lobby = lobby_res.unwrap();
         let mut lobby_writer = lobby.write().await;
+        let num_players = lobby_writer.get_num_players();
+        player.set_id(num_players as u32);
         lobby_writer.add_player_id(&(player.get_id().to_string()));
         // TODO: Create and store WebAppPlayer in global registry.
         return Ok(String::from("ok"));

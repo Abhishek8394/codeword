@@ -3,10 +3,12 @@ use futures::stream::SplitStream;
 use futures::stream::StreamExt;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, mpsc::Sender};
 use warp::ws::Message;
 use warp::ws::WebSocket;
 
+/// websocket msg from a player. (player id, ws message.)
+type PlayerWebSocketMsg = (Option<String>, Message);
 type WebSocketStreamItem = Result<Message, warp::Error>;
 
 pub struct PlayerWebSocketConnection {
@@ -35,7 +37,7 @@ impl Debug for PlayerWebSocketConnection {
 }
 
 impl PlayerWebSocketConnection {
-    pub fn new(ws: Option<WebSocket>) -> Self {
+    pub fn new(ws: Option<WebSocket>, _rcv_fwd: Option<Sender<PlayerWebSocketMsg>>) -> Self {
         let mut pwsc = PlayerWebSocketConnection {
             // sock: None,
             producer: None,
@@ -53,8 +55,10 @@ impl PlayerWebSocketConnection {
         tokio::task::spawn(rx.forward(client_ws_sender));
         self.producer = Some(Arc::new(Mutex::new(tx)));
         self.player_listener = Some(Arc::new(Mutex::new(client_ws_rcv)));
+
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -66,7 +70,7 @@ mod tests {
     async fn test_connection() {
         let route = warp::ws().map(|ws: warp::ws::Ws| {
             ws.on_upgrade(|websocket| async {
-                let pwsc = PlayerWebSocketConnection::new(Some(websocket));
+                let pwsc = PlayerWebSocketConnection::new(Some(websocket), None);
                 let mut rcvr = pwsc.player_listener.as_ref().unwrap().lock().await;
                 let msg = (*rcvr).next().await.unwrap().unwrap();
                 assert_eq!(Ok("hello"), msg.to_str());
