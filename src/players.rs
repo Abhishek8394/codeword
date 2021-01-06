@@ -2,9 +2,11 @@ use crate::errors::ParseError;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+pub type PlayerId = u32;
+
 pub trait Player {
     fn get_name(&self) -> &str;
-    fn get_id(&self) -> &u32;
+    fn get_id(&self) -> &PlayerId;
 }
 
 pub trait TryDeserialize {

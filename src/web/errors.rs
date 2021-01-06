@@ -17,3 +17,18 @@ impl DuplicateLobbyError {
 }
 
 impl Reject for DuplicateLobbyError {}
+
+#[derive(Debug, Clone)]
+pub struct ForwardingError{
+    pub msg: String,
+}
+
+impl ForwardingError {
+    pub fn new(msg: &str) -> Self {
+        Self {
+            msg: String::from(msg),
+        }
+    }
+
+}
+
