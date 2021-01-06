@@ -1,9 +1,12 @@
 use std::collections::HashMap;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, mpsc::{Sender, Receiver}};
+use tokio::sync::{
+    mpsc::{Receiver, Sender},
+    RwLock,
+};
 use warp::ws::Message;
 
 use crate::players::Player;
@@ -52,13 +55,13 @@ impl OnlinePlayer for WebAppPlayer {}
 /// Messages from all players are available as a single queue.WebAppPlayer
 /// TODO: Ability to broadcast messages to players
 /// TODO: Ability to send message to a specific player.
-pub struct PlayerModem{
+pub struct PlayerModem {
     player_map: Arc<RwLock<HashMap<String, WebAppPlayer>>>,
     player_msgq_consumer: Option<Receiver<Message>>,
     player_reader: Option<Sender<Message>>,
 }
 
-impl PlayerModem{
+impl PlayerModem {
     pub fn new() -> Self {
         let (tx, rx) = tokio::sync::mpsc::channel(1024);
         Self {
@@ -97,4 +100,3 @@ mod test {
         assert!(deser_player.conn.is_none());
     }
 }
-

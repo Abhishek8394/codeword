@@ -1,25 +1,21 @@
-
-
-
 use crate::errors::InvalidError;
 use crate::web::errors::ForwardingError;
-use tokio::sync::{Mutex, mpsc::{self, Sender}};
 use futures::stream::SplitStream;
 use futures::stream::StreamExt;
 use std::fmt::Debug;
 use std::sync::Arc;
+use tokio::sync::{
+    mpsc::{self, Sender},
+    Mutex,
+};
 use warp::ws::Message;
 use warp::ws::WebSocket;
-use serde::{Serialize, Deserialize};
-use crate::players::PlayerId;
 
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ChallengeResponse{
-    response: String,
-    pid: PlayerId,
-}
-
+// #[derive(Clone, Debug, Serialize, Deserialize)]
+// pub struct ChallengeResponse{
+//     response: String,
+//     pid: PlayerId,
+// }
 
 // pub trait ChallengeResolver {
 //     fn reslove_challenge(&mut self, msg: &ChallengeResponse) -> Result<PlayerId, InvalidError>;
@@ -56,8 +52,12 @@ impl Debug for PlayerWebSocketConnection {
     }
 }
 
-pub async fn forwarder(id: String, ws: Arc<Mutex<SplitStream<WebSocket>>>, mut fd: tokio::sync::mpsc::Sender<PlayerWebSocketMsg>) -> Result<(), ForwardingError>{
-    loop{
+pub async fn forwarder(
+    id: String,
+    ws: Arc<Mutex<SplitStream<WebSocket>>>,
+    mut fd: tokio::sync::mpsc::Sender<PlayerWebSocketMsg>,
+) -> Result<(), ForwardingError> {
+    loop {
         let msg: Option<WebSocketStreamItem>;
         {
             let mut rdr = ws.lock().await;
@@ -69,16 +69,19 @@ pub async fn forwarder(id: String, ws: Arc<Mutex<SplitStream<WebSocket>>>, mut f
                     let msg = format!("Error in send from ws to pipe: {:?}", e);
                     return ForwardingError::new(&msg);
                 })?;
-            },
+            }
             None => break,
         }
-
     }
     Ok(())
 }
 
 impl PlayerWebSocketConnection {
-    pub fn new(id: &str, ws: Option<WebSocket>, rcv_fwd: Option<Sender<PlayerWebSocketMsg>>) -> Self {
+    pub fn new(
+        id: &str,
+        ws: Option<WebSocket>,
+        rcv_fwd: Option<Sender<PlayerWebSocketMsg>>,
+    ) -> Self {
         let mut pwsc = PlayerWebSocketConnection {
             // sock: None,
             producer: None,
@@ -102,17 +105,24 @@ impl PlayerWebSocketConnection {
         //         return warp::Error { inner: Box::new(e) };
         //     })));
         self.player_listener = Some(Arc::new(Mutex::new(client_ws_rcv)));
-        if self.fwd_pipe.is_some(){
+        if self.fwd_pipe.is_some() {
             self.setup_ws_forwarding(self.fwd_pipe.as_ref().unwrap().clone());
         }
     }
 
-    pub fn setup_ws_forwarding(&mut self, rcv_fwd: Sender<PlayerWebSocketMsg>) -> Result<(), InvalidError> {
-        if self.player_listener.is_none(){
+    pub fn setup_ws_forwarding(
+        &mut self,
+        rcv_fwd: Sender<PlayerWebSocketMsg>,
+    ) -> Result<(), InvalidError> {
+        if self.player_listener.is_none() {
             InvalidError::new("Forwarding already setup elsewhere");
         }
         self.fwd_pipe = Some(rcv_fwd);
-        tokio::task::spawn(forwarder(self.id.clone(), self.player_listener.as_ref().unwrap().clone(), self.fwd_pipe.as_ref().unwrap().clone()));
+        tokio::task::spawn(forwarder(
+            self.id.clone(),
+            self.player_listener.as_ref().unwrap().clone(),
+            self.fwd_pipe.as_ref().unwrap().clone(),
+        ));
         self.player_listener = None;
         Ok(())
     }
@@ -122,7 +132,7 @@ impl PlayerWebSocketConnection {
     }
 
     // pub async fn start_listening(&mut self) {
-        
+
     // }
 
     // TODO: Plan
@@ -158,7 +168,6 @@ impl PlayerWebSocketConnection {
 //     }
 // }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,10 +184,7 @@ mod tests {
                 let msg = (*rcvr).next().await.unwrap().unwrap();
                 assert_eq!(Ok("hello"), msg.to_str());
                 let mut sender = pwsc.producer.as_ref().unwrap().lock().await;
-                (*sender)
-                    .send(Ok(Message::text("world")))
-                    .await
-                    .unwrap();
+                (*sender).send(Ok(Message::text("world"))).await.unwrap();
             })
         });
 

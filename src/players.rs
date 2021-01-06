@@ -32,7 +32,7 @@ impl SimplePlayer {
             id,
         }
     }
-    
+
     pub fn set_id(&mut self, id: u32) {
         self.id = id;
     }
@@ -49,7 +49,6 @@ impl Player for SimplePlayer {
     fn get_id(&self) -> &u32 {
         &self.id
     }
-
 }
 
 impl TryDeserialize for SimplePlayer {

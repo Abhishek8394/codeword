@@ -19,7 +19,7 @@ impl DuplicateLobbyError {
 impl Reject for DuplicateLobbyError {}
 
 #[derive(Debug, Clone)]
-pub struct ForwardingError{
+pub struct ForwardingError {
     pub msg: String,
 }
 
@@ -29,6 +29,4 @@ impl ForwardingError {
             msg: String::from(msg),
         }
     }
-
 }
-
