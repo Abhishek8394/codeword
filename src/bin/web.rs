@@ -17,15 +17,18 @@ mod filters {
 
     use super::handlers;
     use codeword::web::db::InMemGameDB;
+    use warp::filters::ws::ws;
     use warp::Filter;
 
     pub fn app(
         db: InMemGameDB,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        return lobby(db.clone()).or(create_player(db.clone()));
+        return create_lobby_filter(db.clone())
+            .or(create_player(db.clone()))
+            .or(player_websockets(db.clone()));
     }
 
-    pub fn lobby(
+    pub fn create_lobby_filter(
         db: InMemGameDB,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         return warp::path!("lobby")
@@ -43,6 +46,20 @@ mod filters {
             .and(warp::body::json())
             .and(with_db(db))
             .and_then(handlers::create_player)
+    }
+
+    pub fn player_websockets(
+        db: InMemGameDB,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::path!("lobby" / String / "ws")
+            .and(ws())
+            .and(with_db(db))
+            // .map(|lobby_id: String, ws: warp::ws::Ws, db: InMemGameDB| {
+            //     ws.on_upgrade(|websocket|async move {
+            //         println!("CONNECTED!");
+            //     })
+            // })
+            .and_then(handlers::handle_ws_conn)
     }
 
     fn with_db(
@@ -109,6 +126,25 @@ mod handlers {
         return Ok(String::from("ok"));
     }
 
+    pub async fn handle_ws_conn(
+        lobby_id: String,
+        ws: warp::ws::Ws,
+        db: InMemGameDB,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        println!("handling,...");
+        let lobby_res = db.get_lobby(&lobby_id).await;
+        if lobby_res.is_err() {
+            return Err(warp::reject::not_found());
+        }
+
+        let lobby = lobby_res.unwrap();
+        Ok(ws.on_upgrade(|websocket| async move {
+            println!("Upgrading,...");
+            let mut lobby_writer = lobby.write().await;
+            (*lobby_writer).handle_incoming_ws(websocket);
+        }))
+    }
+
     pub fn add_player_to_team() {
         todo!()
         // let player = serde_json::from_str(json_data.as_ref());
@@ -142,5 +178,40 @@ mod handlers {
         //         return String::from("Error adding player");
         //     }
         // }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::filters::create_lobby_filter;
+    use crate::filters::player_websockets;
+
+    #[tokio::test]
+    async fn test_ws_conn() {
+        let db = InMemGameDB::new();
+        let new_lobby_route = create_lobby_filter(db.clone());
+        let res = warp::test::request()
+            .path("/lobby")
+            .method("POST")
+            .reply(&new_lobby_route)
+            .await;
+        let lobby_id = String::from_utf8(res.body().to_vec()).expect("Response encoding error");
+        // assert!(db.get_num_get_num_lobbies().await, Ok(1));
+        let route = player_websockets(db.clone());
+        let ws_path = format!("/lobby/{}/ws", &lobby_id);
+        println!("WS: {}", ws_path);
+        let _client = warp::test::ws()
+            .path(&ws_path)
+            .handshake(route)
+            .await
+            .expect("handshake");
+        let lobby = db
+            .get_lobby(&lobby_id)
+            .await
+            .expect("Should have found lobby");
+        let lobby_rdr = lobby.read().await;
+        assert_eq!(1, (*lobby_rdr).get_num_unidentified_ws());
     }
 }

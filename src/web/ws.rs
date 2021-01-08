@@ -22,8 +22,8 @@ use warp::ws::WebSocket;
 // }
 
 /// websocket msg from a player. (websocket id, ws message.)
-type WebSocketStreamItem = Result<Message, warp::Error>;
-type PlayerWebSocketMsg = (String, WebSocketStreamItem);
+pub type WebSocketStreamItem = Result<Message, warp::Error>;
+pub type PlayerWebSocketMsg = (String, WebSocketStreamItem);
 
 pub struct PlayerWebSocketConnection {
     producer: Option<Arc<Mutex<Sender<WebSocketStreamItem>>>>,
