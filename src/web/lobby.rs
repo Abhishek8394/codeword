@@ -29,9 +29,10 @@ pub struct Lobby {
     pub id: String,
     player_ids: HashSet<String>,
     game: GameWrapper,
-    ws_link_consumer: Receiver<PlayerWebSocketMsg>,
-    ws_link_producer: Sender<PlayerWebSocketMsg>,
+    ws_link_consumer: Option<Receiver<PlayerWebSocketMsg>>,
+    ws_link_producer: Option<Sender<PlayerWebSocketMsg>>,
     unk_ws: HashMap<String, PlayerWebSocketConnection>,
+    allow_conns: bool,
 }
 
 impl Lobby {
@@ -44,10 +45,15 @@ impl Lobby {
                 .map(|x| String::from(x))
                 .collect::<HashSet<String>>(),
             game,
-            ws_link_consumer: rx,
-            ws_link_producer: tx,
+            ws_link_consumer: Some(rx),
+            ws_link_producer: Some(tx),
             unk_ws: HashMap::new(),
+            allow_conns: true,
         }
+    }
+
+    pub fn get_id(&self) -> &str {
+        &self.id
     }
 
     pub fn add_player_id(&mut self, pid: &str) {
@@ -58,41 +64,33 @@ impl Lobby {
         self.player_ids.len()
     }
 
-    pub fn handle_incoming_ws(&mut self, websocket: warp::ws::WebSocket) -> () {
-        let ws_id = Uuid::new_v4().to_string();
-        let pwsc = PlayerWebSocketConnection::new(
-            &ws_id,
-            Some(websocket),
-            Some(self.ws_link_producer.clone()),
-        );
-        self.unk_ws.insert(ws_id, pwsc);
-    }
-
-    pub async fn start_ws_listening(&mut self) {
-        loop {
-            let pws_msg = self.ws_link_consumer.recv().await;
-            match pws_msg {
-                Some(pws_msg) => {
-                    if let (uniq_id, Ok(msg)) = pws_msg {
-                        println!("[{}] Got: {:?}", uniq_id, msg);
-                        // TODO:
-                        // - match uniq id
-                        // - handle auth msg
-                        // - handle game msg
-                    }
-                }
-                // everyone has disconnected, drop out and delete lobby maybe?
-                // If don't want to drop, then remove break.
-                None => break,
-            }
+    pub async fn handle_incoming_ws(&mut self, websocket: warp::ws::WebSocket) -> () {
+        if !self.allow_conns {
+            let _ = websocket.close().await;
+            return;
         }
+        let ws_id = Uuid::new_v4().to_string();
+        let pwsc =
+            PlayerWebSocketConnection::new(&ws_id, Some(websocket), self.ws_link_producer.clone());
+        self.unk_ws.insert(ws_id, pwsc);
     }
 
     pub fn get_num_unidentified_ws(&self) -> usize {
         self.unk_ws.len()
     }
 
-    // pub async fn startup(self){
-    //     tokio::task::spawn(self.clone().start_ws_listening());
-    // }
+    pub fn get_ws_receiver(&mut self) -> Result<Receiver<PlayerWebSocketMsg>, InvalidError> {
+        match self.ws_link_consumer.take() {
+            Some(rcvr) => Ok(rcvr),
+            None => Err(InvalidError::new("Receiver already taken")),
+        }
+    }
+
+    pub async fn quit(mut self) {
+        self.allow_conns = false;
+        self.ws_link_producer = None;
+        drop(self);
+        // TODO: Disconnect everyone.
+        todo!()
+    }
 }

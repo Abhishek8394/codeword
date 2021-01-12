@@ -74,8 +74,9 @@ mod handlers {
     use crate::GameWrapper;
     use anyhow::Result;
     use codeword::players::{Player, SimplePlayer};
-    use codeword::web::db::InMemGameDB;
+    use codeword::web::db::{spawn_lobby_death_timer, spawn_lobby_ws_listen_task, InMemGameDB};
     use codeword::web::lobby::Lobby;
+    use std::time::Duration;
     use uuid::Uuid;
 
     pub fn generate_game_id() -> String {
@@ -93,10 +94,19 @@ mod handlers {
             }
         };
         let game_id = generate_game_id();
-        let lobby = Lobby::new(&game_id, &(Vec::new()), game);
+        // create lobby and make sure core things work.
+        let mut lobby = Lobby::new(&game_id, &(Vec::new()), game);
+        let lobby_ws_rcvr = lobby.get_ws_receiver();
+        let lobby_ws_rcvr = lobby_ws_rcvr.map_err(|e| warp::reject::custom(e))?;
+        // all good, add to DB.
         let add_res = db.add_new_lobby(lobby).await;
         match add_res {
             Ok(_) => {
+                // kick start the lobby websocket listening loop.
+                let lobby_expire = Duration::from_secs(120);
+                spawn_lobby_ws_listen_task(db.clone(), &game_id, lobby_ws_rcvr);
+                spawn_lobby_death_timer(db.clone(), &game_id, lobby_expire);
+                // return response
                 return Ok(String::from(format!("{}", game_id)));
             }
             Err(e) => {
@@ -141,7 +151,7 @@ mod handlers {
         Ok(ws.on_upgrade(|websocket| async move {
             println!("Upgrading,...");
             let mut lobby_writer = lobby.write().await;
-            (*lobby_writer).handle_incoming_ws(websocket);
+            (*lobby_writer).handle_incoming_ws(websocket).await;
         }))
     }
 
