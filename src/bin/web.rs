@@ -73,7 +73,7 @@ mod handlers {
 
     use crate::GameWrapper;
     use anyhow::Result;
-    use codeword::players::{Player, SimplePlayer};
+    use codeword::players::{SimplePlayer};
     use codeword::web::db::{InMemGameDB};
     use codeword::web::tasks::{spawn_lobby_death_timer, spawn_lobby_ws_listen_task};
     use codeword::web::lobby::Lobby;
@@ -129,10 +129,10 @@ mod handlers {
         }
 
         let lobby = lobby_res.unwrap();
-        let mut lobby_writer = lobby.write().await;
-        let num_players = lobby_writer.get_num_players();
+        let lobby_writer = lobby.read().await;
+        let num_players = lobby_writer.get_num_players().await;
         player.set_id(num_players as u32);
-        lobby_writer.add_player_id(&(player.get_id().to_string()));
+        lobby_writer.add_player(player.into()).await;
         // TODO: Create and store WebAppPlayer in global registry.
         return Ok(String::from("ok"));
     }
@@ -223,7 +223,7 @@ mod tests {
             .expect("Should have found lobby");
         {
             let lobby_rdr = lobby.read().await;
-            assert_eq!(1, (*lobby_rdr).get_num_unidentified_ws());
+            assert_eq!(1, (*lobby_rdr).get_num_unidentified_ws().await);
         }
         db.drop_lobby(&lobby_id).await;
     }

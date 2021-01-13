@@ -1,4 +1,5 @@
 // use serde::{Serialize, Deserialize};
+use crate::web::players::PlayerModem;
 use super::players::WebAppPlayer;
 use crate::errors::InvalidError;
 use crate::game::Game;
@@ -6,8 +7,6 @@ use crate::game::InProgressGame;
 use crate::game::InitialGame;
 use crate::web::ws::PlayerWebSocketConnection;
 use crate::web::ws::PlayerWebSocketMsg;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use uuid::Uuid;
 
@@ -27,28 +26,28 @@ impl GameWrapper {
 // #[derive(Serialize, Deserialize)]
 pub struct Lobby {
     pub id: String,
-    player_ids: HashSet<String>,
+    // player_ids: HashSet<String>,
     game: GameWrapper,
     ws_link_consumer: Option<Receiver<PlayerWebSocketMsg>>,
     ws_link_producer: Option<Sender<PlayerWebSocketMsg>>,
-    unk_ws: HashMap<String, PlayerWebSocketConnection>,
     allow_conns: bool,
+    player_modem: PlayerModem,
 }
 
 impl Lobby {
-    pub fn new(id: &str, player_ids: &Vec<String>, game: GameWrapper) -> Self {
+    pub fn new(id: &str, _player_ids: &Vec<String>, game: GameWrapper) -> Self {
         let (tx, rx) = mpsc::channel(1024);
         Lobby {
             id: String::from(id),
-            player_ids: player_ids
-                .iter()
-                .map(|x| String::from(x))
-                .collect::<HashSet<String>>(),
+            // player_ids: player_ids
+            //     .iter()
+            //     .map(|x| String::from(x))
+            //     .collect::<HashSet<String>>(),
             game,
             ws_link_consumer: Some(rx),
             ws_link_producer: Some(tx),
-            unk_ws: HashMap::new(),
             allow_conns: true,
+            player_modem: PlayerModem::new()
         }
     }
 
@@ -56,12 +55,12 @@ impl Lobby {
         &self.id
     }
 
-    pub fn add_player_id(&mut self, pid: &str) {
-        self.player_ids.insert(String::from(pid));
+    pub async fn add_player(&self, player: WebAppPlayer) {
+        self.player_modem.add_player(player).await;
     }
 
-    pub fn get_num_players(&self) -> usize {
-        self.player_ids.len()
+    pub async fn get_num_players(&self) -> usize {
+        self.player_modem.get_num_players().await
     }
 
     pub async fn handle_incoming_ws(&mut self, websocket: warp::ws::WebSocket) -> () {
@@ -72,11 +71,11 @@ impl Lobby {
         let ws_id = Uuid::new_v4().to_string();
         let pwsc =
             PlayerWebSocketConnection::new(&ws_id, Some(websocket), self.ws_link_producer.clone());
-        self.unk_ws.insert(ws_id, pwsc);
+        self.player_modem.add_orphan_conn(pwsc).await;
     }
 
-    pub fn get_num_unidentified_ws(&self) -> usize {
-        self.unk_ws.len()
+    pub async fn get_num_unidentified_ws(&self) -> usize {
+        return self.player_modem.get_num_orphan_conns().await;
     }
 
     pub fn get_ws_receiver(&mut self) -> Result<Receiver<PlayerWebSocketMsg>, InvalidError> {
