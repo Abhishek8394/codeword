@@ -86,11 +86,8 @@ impl Lobby {
         }
     }
 
-    pub async fn quit(mut self) {
+    pub async fn quit(&mut self) {
         self.allow_conns = false;
         self.ws_link_producer = None;
-        drop(self);
-        // TODO: Disconnect everyone.
-        todo!()
     }
 }

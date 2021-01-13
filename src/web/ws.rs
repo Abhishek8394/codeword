@@ -179,7 +179,7 @@ mod tests {
         let route = warp::ws().map(|ws: warp::ws::Ws| {
             ws.on_upgrade(|websocket| async {
                 let pwsc = PlayerWebSocketConnection::new("uNiQiD", Some(websocket), None);
-                let lstr = pwsc.player_listener.unwrap();
+                let lstr = pwsc.player_listener.as_ref().unwrap();
                 let mut rcvr = lstr.lock().await;
                 let msg = (*rcvr).next().await.unwrap().unwrap();
                 assert_eq!(Ok("hello"), msg.to_str());

@@ -141,7 +141,6 @@ mod handlers {
         ws: warp::ws::Ws,
         db: InMemGameDB,
     ) -> Result<impl warp::Reply, warp::Rejection> {
-        println!("handling,...");
         let lobby_res = db.get_lobby(&lobby_id).await;
         if lobby_res.is_err() {
             return Err(warp::reject::not_found());
@@ -149,7 +148,7 @@ mod handlers {
 
         let lobby = lobby_res.unwrap();
         Ok(ws.on_upgrade(|websocket| async move {
-            println!("Upgrading,...");
+            eprintln!("Upgrading websocket for lobby: {}", lobby_id);
             let mut lobby_writer = lobby.write().await;
             (*lobby_writer).handle_incoming_ws(websocket).await;
         }))
@@ -200,7 +199,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ws_conn() {
-        let db = InMemGameDB::new();
+        let mut db = InMemGameDB::new();
         let new_lobby_route = create_lobby_filter(db.clone());
         let res = warp::test::request()
             .path("/lobby")
@@ -221,7 +220,10 @@ mod tests {
             .get_lobby(&lobby_id)
             .await
             .expect("Should have found lobby");
-        let lobby_rdr = lobby.read().await;
-        assert_eq!(1, (*lobby_rdr).get_num_unidentified_ws());
+        {
+            let lobby_rdr = lobby.read().await;
+            assert_eq!(1, (*lobby_rdr).get_num_unidentified_ws());
+        }
+        db.drop_lobby(&lobby_id).await;
     }
 }

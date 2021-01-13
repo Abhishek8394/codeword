@@ -57,10 +57,12 @@ impl InMemGameDB {
 
     pub async fn drop_lobby(&mut self, lobby_id: &str) {
         let mut w1 = self.db.write().await;
-        if let Some(lobby) = (*w1).get(lobby_id) {
-            (*(lobby.write().await)).quit().await;
+        if let Some(lobby) = (*w1).remove(lobby_id){
+            {
+                let mut writer = lobby.write().await;
+                (writer).quit().await;
+            }
         }
-        (*w1).remove(lobby_id);
     }
 }
 
@@ -93,6 +95,7 @@ pub fn spawn_lobby_ws_listen_task(
                 }
             }
         }
+        eprintln!("[{:?}] Ended websocket loop", game_id);
     });
 }
 
