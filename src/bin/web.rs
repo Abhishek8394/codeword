@@ -74,7 +74,8 @@ mod handlers {
     use crate::GameWrapper;
     use anyhow::Result;
     use codeword::players::{Player, SimplePlayer};
-    use codeword::web::db::{spawn_lobby_death_timer, spawn_lobby_ws_listen_task, InMemGameDB};
+    use codeword::web::db::{InMemGameDB};
+    use codeword::web::tasks::{spawn_lobby_death_timer, spawn_lobby_ws_listen_task};
     use codeword::web::lobby::Lobby;
     use std::time::Duration;
     use uuid::Uuid;
