@@ -30,3 +30,8 @@ impl ForwardingError {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum WebSocketError{
+    CloseError(String),
+}

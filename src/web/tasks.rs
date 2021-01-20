@@ -20,6 +20,10 @@ pub fn spawn_lobby_ws_listen_task(
                         if let (uniq_id, Ok(msg)) = pws_msg {
                             let lobby_rdr = lobby.read().await;
                             println!("[{}] Got ({}): {:?}", (*lobby_rdr).get_id(), uniq_id, msg);
+                            if msg.is_close(){
+                                (*lobby_rdr).close_ws(&uniq_id).await;
+                                break;
+                            }
                             // TODO:
                             // - match uniq id
                             // - handle auth msg

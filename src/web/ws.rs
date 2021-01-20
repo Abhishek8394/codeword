@@ -1,3 +1,4 @@
+use crate::web::errors::WebSocketError;
 use crate::errors::InvalidError;
 use crate::web::errors::ForwardingError;
 use futures::stream::SplitStream;
@@ -26,8 +27,11 @@ pub type WebSocketStreamItem = Result<Message, warp::Error>;
 pub type PlayerWebSocketMsg = (String, WebSocketStreamItem);
 
 pub struct PlayerWebSocketConnection {
+    /// Send msg to ws
     producer: Option<Arc<Mutex<Sender<WebSocketStreamItem>>>>,
+    /// Hold player ws receiver if not in use atm
     player_listener: Option<Arc<Mutex<SplitStream<WebSocket>>>>,
+    /// The sending end for forwarding ws msgs received from player side. player -> ws -> fwd_pipe (Sender) -> whatever rcvr for Sender.
     fwd_pipe: Option<Sender<PlayerWebSocketMsg>>,
     id: String,
 }
@@ -129,6 +133,19 @@ impl PlayerWebSocketConnection {
 
     pub fn get_id(&self) -> &str {
         &self.id
+    }
+
+    pub async fn close(&self) -> Result<(), WebSocketError> {
+        if self.producer.is_some(){
+            return match (*(self.producer.as_ref().unwrap().lock().await)).send(Ok(Message::close())).await{
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    eprintln!("WS closing error: {:?}", e);
+                    Err(WebSocketError::CloseError(e.to_string()))
+                }
+            }
+        }
+        return Ok(())
     }
 
     // pub async fn start_listening(&mut self) {

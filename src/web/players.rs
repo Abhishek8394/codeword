@@ -1,3 +1,4 @@
+use crate::web::errors::WebSocketError;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -49,6 +50,15 @@ impl WebAppPlayer {
 
     pub fn set_conn(&mut self, pwsc: PlayerWebSocketConnection) {
         self.conn = Some(Arc::new(pwsc));
+    }
+
+    pub async fn close_ws(&mut self) -> Result<(), WebSocketError> {
+        if self.conn.is_none(){
+            return Ok(());
+        }
+        let res = self.conn.as_ref().unwrap().close().await;
+        self.conn = None;
+        return res;
     }
 }
 
@@ -132,6 +142,54 @@ impl PlayerModem {
     pub async fn get_num_orphan_conns(&self) -> usize {
         let reader = self.ws_map.read().await;
         return (*reader).len();
+    }
+
+    pub async fn remove_ws_plaeyer_mapping(&self, id: &str) {
+        let mut writer = self.ws_player_map.write().await;
+        (*writer).remove(id);
+    }
+
+    /// Close a websocket
+    pub async fn close_ws(&self, id: &str) -> Result<(), WebSocketError> {
+        // if an orphan conn.
+        {
+            let mut writer = self.ws_map.write().await;
+            match (*writer).get(id){
+                Some(pwsc) => {
+                    let res = pwsc.close().await;
+                    // if ws closed, remove ref to it
+                    if res.is_ok() {
+                        (*writer).remove(id);
+                    }
+                    return res;
+                },
+                None => {},
+            };
+        }
+        // if on a player
+        {
+            match self.get_ws_player_id(id).await{
+                Some(pid) => {
+                    {
+                        let rdr = self.player_map.read().await;
+                        match (*rdr).get(&pid){
+                            Some(player_rw) => {
+                                let mut player = player_rw.write().await;
+                                let res = player.close_ws().await;
+                                // if ws closed, remove mapping.
+                                if res.is_ok(){
+                                    self.remove_ws_plaeyer_mapping(id).await;
+                                }
+                                return res;
+                            },
+                            None => {},
+                        };
+                    }
+                },
+                None => {},
+            }
+        }
+        return Ok(());
     }
 }
 

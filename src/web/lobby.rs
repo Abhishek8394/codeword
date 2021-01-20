@@ -99,6 +99,18 @@ impl Lobby {
         }
     }
 
+    /// Close a websocket
+    pub async fn close_ws(&self, id: &str) {
+        match self.player_modem.close_ws(id).await {
+            Ok(_) => {
+                eprintln!("[{}] closed ws: {:?}", self.id, id);
+            },
+            Err(e) => {
+                eprintln!("[{}] error closing ws: {:?}, {:?}", self.id, id, e);
+            }
+        };
+    }
+
     pub async fn quit(&mut self) {
         self.allow_conns = false;
         self.ws_link_producer = None;

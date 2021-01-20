@@ -14,6 +14,7 @@ pub struct AuthChallenge{
 }
 
 
+/// Internal Auth challenge containing answer too.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InternalAuthChallenge{
     pub challenge: AuthChallenge,
