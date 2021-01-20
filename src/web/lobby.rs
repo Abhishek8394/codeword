@@ -1,6 +1,11 @@
 // use serde::{Serialize, Deserialize};
-use crate::web::players::PlayerModem;
+use tokio::sync::RwLock;
 use super::players::WebAppPlayer;
+use crate::players::PlayerId;
+use crate::web::auth::{AuthChallenge, InternalAuthChallenge, build_echo_challenge};
+use std::collections::HashMap;
+use std::sync::Arc;
+use crate::web::players::PlayerModem;
 use crate::errors::InvalidError;
 use crate::game::Game;
 use crate::game::InProgressGame;
@@ -9,6 +14,7 @@ use crate::web::ws::PlayerWebSocketConnection;
 use crate::web::ws::PlayerWebSocketMsg;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use uuid::Uuid;
+use crate::players::Player;
 
 // #[derive(Serialize, Deserialize)]
 pub enum GameWrapper {
@@ -32,6 +38,7 @@ pub struct Lobby {
     ws_link_producer: Option<Sender<PlayerWebSocketMsg>>,
     allow_conns: bool,
     player_modem: PlayerModem,
+    auth_challenges: Arc<RwLock<HashMap<PlayerId, InternalAuthChallenge>>>,
 }
 
 impl Lobby {
@@ -47,7 +54,8 @@ impl Lobby {
             ws_link_consumer: Some(rx),
             ws_link_producer: Some(tx),
             allow_conns: true,
-            player_modem: PlayerModem::new()
+            player_modem: PlayerModem::new(),
+            auth_challenges: Arc::new(RwLock::new(HashMap::new()))
         }
     }
 
@@ -55,8 +63,14 @@ impl Lobby {
         &self.id
     }
 
-    pub async fn add_player(&self, player: WebAppPlayer) {
+    pub async fn add_player(&self, player: WebAppPlayer) -> AuthChallenge {
+        let pid = player.get_id().clone();
         self.player_modem.add_player(player).await;
+        let int_auth_challenge = build_echo_challenge(pid, None);
+        let player_challenge = int_auth_challenge.get_player_challenge().clone();
+        let mut writer = self.auth_challenges.write().await;
+        (*writer).insert(pid, int_auth_challenge.clone());
+        return player_challenge;
     }
 
     pub async fn get_num_players(&self) -> usize {

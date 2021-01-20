@@ -71,6 +71,7 @@ mod filters {
 
 mod handlers {
 
+    use codeword::web::responses::{CreatePlayerResp, OpStatus};
     use crate::GameWrapper;
     use anyhow::Result;
     use codeword::players::{SimplePlayer};
@@ -132,9 +133,11 @@ mod handlers {
         let lobby_writer = lobby.read().await;
         let num_players = lobby_writer.get_num_players().await;
         player.set_id(num_players as u32);
-        lobby_writer.add_player(player.into()).await;
-        // TODO: Create and store WebAppPlayer in global registry.
-        return Ok(String::from("ok"));
+        let auth_challenge = lobby_writer.add_player(player.into()).await;
+        return Ok(warp::reply::json(&CreatePlayerResp{
+                    status: OpStatus::Ok,
+                    challenge: auth_challenge,
+                }));
     }
 
     pub async fn handle_ws_conn(
