@@ -1,3 +1,4 @@
+use crate::web::wsproto::WSMessage;
 use crate::web::db::InMemGameDB;
 use crate::web::ws::PlayerWebSocketMsg;
 use std::time::Duration;
@@ -23,6 +24,16 @@ pub fn spawn_lobby_ws_listen_task(
                             if msg.is_close(){
                                 (*lobby_rdr).close_ws(&uniq_id).await;
                                 break;
+                            }
+                            let ws_msg: WSMessage = msg.into();
+                            match ws_msg{
+                                WSMessage::AuthResponse(auth_resp) => {
+                                    (*lobby_rdr).handle_auth_resp(&uniq_id, auth_resp).await;
+                                    // tokio::task::spawn();
+                                },
+                                WSMessage::InvalidMessage => {
+                                    // do nothing. Log maybe?
+                                }
                             }
                             // TODO:
                             // - match uniq id

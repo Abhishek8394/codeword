@@ -15,6 +15,7 @@ use crate::web::ws::PlayerWebSocketMsg;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use uuid::Uuid;
 use crate::players::Player;
+use crate::web::wsproto::AuthResponse;
 
 // #[derive(Serialize, Deserialize)]
 pub enum GameWrapper {
@@ -120,5 +121,25 @@ impl Lobby {
     pub async fn quit(&mut self) {
         self.allow_conns = false;
         self.ws_link_producer = None;
+    }
+
+    pub async fn handle_auth_resp(&self, ws_id: &str,  msg: AuthResponse){
+        let pid = msg.pid;
+        let mut ok = false;
+        {
+            let mut writer = self.auth_challenges.write().await;
+            if let Some(challenge) = (*writer).get(&pid) {
+                if challenge.response_matches(&msg){
+                    ok = true;
+                    (*writer).remove(&pid);
+                }
+            }
+        }
+        if ok {
+            self.player_modem.relate_player_ws_conn(ws_id, pid.to_string().as_str()).await;
+        }
+        // find challenge if found.
+        // if passes, perform player mapping
+        // else close this socket.
     }
 }

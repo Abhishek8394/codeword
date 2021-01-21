@@ -121,6 +121,7 @@ impl PlayerModem {
             let reader = self.player_map.read().await;
             if let Some(player) = (*reader).get(pid){
                 let mut player_writer = player.write().await;
+                eprintln!("player {} connected via {}", pid, ws_id);
                 (*player_writer).set_conn(pwsc.unwrap());
             }
         }
@@ -144,7 +145,7 @@ impl PlayerModem {
         return (*reader).len();
     }
 
-    pub async fn remove_ws_plaeyer_mapping(&self, id: &str) {
+    pub async fn remove_ws_player_mapping(&self, id: &str) {
         let mut writer = self.ws_player_map.write().await;
         (*writer).remove(id);
     }
@@ -178,7 +179,7 @@ impl PlayerModem {
                                 let res = player.close_ws().await;
                                 // if ws closed, remove mapping.
                                 if res.is_ok(){
-                                    self.remove_ws_plaeyer_mapping(id).await;
+                                    self.remove_ws_player_mapping(id).await;
                                 }
                                 return res;
                             },

@@ -35,7 +35,7 @@ impl InternalAuthChallenge{
 
 
 /// Player response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AuthResponse{
     /// Player responding
     pub pid: PlayerId,
