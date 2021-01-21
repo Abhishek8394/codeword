@@ -45,7 +45,7 @@ pub fn spawn_lobby_death_timer(mut db: InMemGameDB, game_id: &str, duration: Dur
     let game_id: String = game_id.to_string();
     tokio::task::spawn(async move {
         eprintln!("[{:?}] Starting death timer: {:?}", game_id, duration);
-        tokio::time::delay_for(duration).await; // called sleep in 1.0+
+        tokio::time::sleep(duration).await;
         db.drop_lobby(&game_id).await;
     });
 }

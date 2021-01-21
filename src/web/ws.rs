@@ -1,8 +1,6 @@
-use crate::web::errors::WebSocketError;
-use crate::errors::InvalidError;
-use crate::web::errors::ForwardingError;
+use crate::web::errors::{ForwardingError, WebSocketError};
 use futures::stream::SplitStream;
-use futures::stream::StreamExt;
+use futures::StreamExt;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::{
@@ -11,6 +9,7 @@ use tokio::sync::{
 };
 use warp::ws::Message;
 use warp::ws::WebSocket;
+use tokio_stream::wrappers::ReceiverStream;
 
 // #[derive(Clone, Debug, Serialize, Deserialize)]
 // pub struct ChallengeResponse{
@@ -59,7 +58,7 @@ impl Debug for PlayerWebSocketConnection {
 pub async fn forwarder(
     id: String,
     ws: Arc<Mutex<SplitStream<WebSocket>>>,
-    mut fd: tokio::sync::mpsc::Sender<PlayerWebSocketMsg>,
+    fd: tokio::sync::mpsc::Sender<PlayerWebSocketMsg>,
 ) -> Result<(), ForwardingError> {
     loop {
         let msg: Option<WebSocketStreamItem>;
@@ -85,7 +84,7 @@ impl PlayerWebSocketConnection {
         id: &str,
         ws: Option<WebSocket>,
         rcv_fwd: Option<Sender<PlayerWebSocketMsg>>,
-    ) -> Self {
+    ) -> Result<Self, WebSocketError> {
         let mut pwsc = PlayerWebSocketConnection {
             // sock: None,
             producer: None,
@@ -94,14 +93,15 @@ impl PlayerWebSocketConnection {
             id: String::from(id),
         };
         if ws.is_some() {
-            pwsc.set_websocket(ws.unwrap());
+            pwsc.set_websocket(ws.unwrap())?;
         }
-        return pwsc;
+        return Ok(pwsc);
     }
 
-    pub fn set_websocket(&mut self, ws: WebSocket) -> () {
+    pub fn set_websocket(&mut self, ws: WebSocket) -> Result<(), WebSocketError> {
         let (client_ws_sender, client_ws_rcv) = ws.split();
         let (tx, rx) = mpsc::channel(1024);
+        let rx = ReceiverStream::new(rx);
         tokio::task::spawn(rx.forward(client_ws_sender));
         self.producer = Some(Arc::new(Mutex::new(tx)));
         // let (tx, rx) = mpsc::channel(1024);
@@ -110,16 +110,17 @@ impl PlayerWebSocketConnection {
         //     })));
         self.player_listener = Some(Arc::new(Mutex::new(client_ws_rcv)));
         if self.fwd_pipe.is_some() {
-            self.setup_ws_forwarding(self.fwd_pipe.as_ref().unwrap().clone());
+            self.setup_ws_forwarding(self.fwd_pipe.as_ref().unwrap().clone())?;
         }
+        Ok(())
     }
 
     pub fn setup_ws_forwarding(
         &mut self,
         rcv_fwd: Sender<PlayerWebSocketMsg>,
-    ) -> Result<(), InvalidError> {
+    ) -> Result<(), WebSocketError> {
         if self.player_listener.is_none() {
-            InvalidError::new("Forwarding already setup elsewhere");
+            return Err(WebSocketError::PipeSetupError("Forwarding already setup elsewhere".to_string()));
         }
         self.fwd_pipe = Some(rcv_fwd);
         tokio::task::spawn(forwarder(
@@ -195,12 +196,12 @@ mod tests {
     async fn test_connection() {
         let route = warp::ws().map(|ws: warp::ws::Ws| {
             ws.on_upgrade(|websocket| async {
-                let pwsc = PlayerWebSocketConnection::new("uNiQiD", Some(websocket), None);
+                let pwsc = PlayerWebSocketConnection::new("uNiQiD", Some(websocket), None).unwrap();
                 let lstr = pwsc.player_listener.as_ref().unwrap();
                 let mut rcvr = lstr.lock().await;
                 let msg = (*rcvr).next().await.unwrap().unwrap();
                 assert_eq!(Ok("hello"), msg.to_str());
-                let mut sender = pwsc.producer.as_ref().unwrap().lock().await;
+                let sender = pwsc.producer.as_ref().unwrap().lock().await;
                 (*sender).send(Ok(Message::text("world"))).await.unwrap();
             })
         });

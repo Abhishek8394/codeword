@@ -33,5 +33,8 @@ impl ForwardingError {
 
 #[derive(Debug, Clone)]
 pub enum WebSocketError{
+    /// Error closing it
     CloseError(String),
+    /// Error setting up pipes to / from ws.
+    PipeSetupError(String),
 }

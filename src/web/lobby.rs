@@ -85,7 +85,13 @@ impl Lobby {
         let ws_id = Uuid::new_v4().to_string();
         let pwsc =
             PlayerWebSocketConnection::new(&ws_id, Some(websocket), self.ws_link_producer.clone());
-        self.player_modem.add_orphan_conn(pwsc).await;
+        match pwsc{
+            Ok(pwsc) => {self.player_modem.add_orphan_conn(pwsc).await;},
+            Err(e) => {
+                eprintln!("[{}] Error setting up ws ({}): {:?}", self.id, ws_id, e);
+            }
+        }
+        
     }
 
     pub async fn get_num_unidentified_ws(&self) -> usize {
