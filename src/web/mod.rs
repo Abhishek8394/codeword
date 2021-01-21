@@ -6,5 +6,6 @@ pub mod ws;
 pub mod tasks;
 pub mod auth;
 pub mod responses;
+pub mod wsproto;
 
 pub use self::players::OnlinePlayer;
