@@ -37,4 +37,8 @@ pub enum WebSocketError{
     CloseError(String),
     /// Error setting up pipes to / from ws.
     PipeSetupError(String),
+    /// Error sending to ws
+    SendError(String),
+    /// Websocket not found
+    WSNotFoundError(String),
 }

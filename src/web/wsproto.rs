@@ -7,14 +7,18 @@ pub use crate::web::auth::{AuthResponse, AuthChallenge};
 /// Wrapper for all Websocket messages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WSMessage{
-    /// Auth response
+    /// Auth challenge response from player to server
     AuthResponse(AuthResponse),
     /// catch all invalid messages
     InvalidMessage,
+    /// Server authentication for websocket.
+    AuthOk,
+    /// Server rejecting websocket auth.
+    AuthReject,
 }
 
 impl From<Message> for WSMessage{
-    fn from(msg: Message) -> Self { 
+    fn from(msg: Message) -> Self {
         match msg.to_str(){
             Ok(msg_str) => {
                 let tmp = serde_json::from_str(msg_str);
@@ -27,6 +31,19 @@ impl From<Message> for WSMessage{
                 WSMessage::InvalidMessage
             }
         }
+    }
+}
+
+impl Into<Message> for WSMessage{
+    fn into(self) -> Message { 
+        let msg_txt = match serde_json::to_string(&self){
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Error converting msg to json: {:?}", self);
+                "".to_string()
+            },
+        };
+        Message::text(msg_txt)
     }
 }
 

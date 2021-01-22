@@ -33,7 +33,9 @@ pub fn spawn_lobby_ws_listen_task(
                                 },
                                 WSMessage::InvalidMessage => {
                                     // do nothing. Log maybe?
-                                }
+                                },
+                                WSMessage::AuthOk => {}
+                                WSMessage::AuthReject => {}
                             }
                             // TODO:
                             // - match uniq id

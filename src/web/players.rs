@@ -1,3 +1,5 @@
+use crate::players::PlayerId;
+use warp::ws::Message;
 use crate::web::errors::WebSocketError;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,14 +36,14 @@ impl Player for WebAppPlayer {
         self.player.get_name()
     }
 
-    fn get_id(&self) -> &u32 {
+    fn get_id(&self) -> &PlayerId {
         self.player.get_id()
     }
 
 }
 
 impl WebAppPlayer {
-    pub fn new(name: &str, id: u32) -> Self {
+    pub fn new(name: &str, id: PlayerId) -> Self {
         WebAppPlayer {
             player: SimplePlayer::new(name, id),
             conn: None,
@@ -59,6 +61,14 @@ impl WebAppPlayer {
         let res = self.conn.as_ref().unwrap().close().await;
         self.conn = None;
         return res;
+    }
+
+    pub async fn send_msg(&mut self, msg: Message) -> Result<(), WebSocketError> {
+        if self.conn.is_none(){
+            let err_msg = format!("websocket not bound for player: {}", self.player.get_id());
+            return Err(WebSocketError::WSNotFoundError(err_msg));
+        }
+        return self.conn.as_ref().unwrap().send_msg(msg).await;
     }
 }
 
@@ -191,6 +201,38 @@ impl PlayerModem {
             }
         }
         return Ok(());
+    }
+
+    pub async fn send_player_msg(&self, pid: &str, msg: Message) -> Result<(), WebSocketError> {
+        {
+            let reader = self.player_map.read().await;
+            if let Some(player) = (*reader).get(pid){
+                let mut writer = player.write().await;
+                return (*writer).send_msg(msg).await;
+            }
+        }
+        let err_msg = format!("websocket not found for player: {}", pid);
+        return Err(WebSocketError::WSNotFoundError(err_msg));
+    }
+
+    /// send message to a websocket.
+    pub async fn ws_send_msg(&self, ws_id: &str, msg: Message) -> Result<(), WebSocketError> {
+        {
+            let reader = self.ws_map.read().await;
+            if let Some(pwsc) = (*reader).get(ws_id).as_ref() {
+                return pwsc.send_msg(msg).await;
+            }
+        }
+        {
+            match self.get_ws_player_id(ws_id).await{
+                Some(pid) => {
+                    return self.send_player_msg(&pid, msg).await;
+                },
+                None => {}
+            }
+        }
+        let err_msg = format!("websocket not found: {}", ws_id);
+        return Err(WebSocketError::WSNotFoundError(err_msg));
     }
 }
 

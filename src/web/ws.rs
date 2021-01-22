@@ -11,16 +11,6 @@ use warp::ws::Message;
 use warp::ws::WebSocket;
 use tokio_stream::wrappers::ReceiverStream;
 
-// #[derive(Clone, Debug, Serialize, Deserialize)]
-// pub struct ChallengeResponse{
-//     response: String,
-//     pid: PlayerId,
-// }
-
-// pub trait ChallengeResolver {
-//     fn reslove_challenge(&mut self, msg: &ChallengeResponse) -> Result<PlayerId, InvalidError>;
-// }
-
 /// websocket msg from a player. (websocket id, ws message.)
 pub type WebSocketStreamItem = Result<Message, warp::Error>;
 pub type PlayerWebSocketMsg = (String, WebSocketStreamItem);
@@ -136,55 +126,30 @@ impl PlayerWebSocketConnection {
         &self.id
     }
 
+
+    /// Close the websocket.
     pub async fn close(&self) -> Result<(), WebSocketError> {
+        return self.send_msg(Message::close()).await.map_err(|e|{ WebSocketError::CloseError(format!("{:?}", e))});
+        // TODO: Other cleanup.
+    }
+
+    /// Send a message to websocket.
+    pub async fn send_msg(&self, msg: Message) -> Result<(), WebSocketError> {
         if self.producer.is_some(){
-            return match (*(self.producer.as_ref().unwrap().lock().await)).send(Ok(Message::close())).await{
+            let producer = self.producer.as_ref().unwrap().lock().await;
+            return match (*producer).send(Ok(msg)).await{
                 Ok(_) => Ok(()),
                 Err(e) => {
-                    eprintln!("WS closing error: {:?}", e);
-                    Err(WebSocketError::CloseError(e.to_string()))
+                    Err(WebSocketError::SendError(e.to_string()))
                 }
             }
         }
-        return Ok(())
+        Ok(())
     }
 
-    // pub async fn start_listening(&mut self) {
-
-    // }
-
     // TODO: Plan
-    // ws -> msgToPlayerMsgConverter -> publish to PlayerModelMpscProducer
     // handle disconnection.
 }
-
-// impl Stream for PlayerWebSocketConnection{
-
-//     type Item = PlayerWebSocketMsg;
-//     fn poll_next(self: Pin<&mut Self>, _: &mut std::task::Context<'_>) -> Poll<std::option::Option<<Self as Stream>::Item>> {
-//         if self.consumer.is_some(){
-//             match self.consumer.as_ref().unwrap().try_recv(){
-//                 Ok(msg) => {
-//                     return Poll::Ready(Some((self.pid, msg)));
-//                 },
-//                 Err(e) => {
-//                     match e {
-//                         TryRecvError::Empty => {
-//                             // TODO: Spawn hanging read.
-//                             return Poll::Pending;
-//                         },
-//                         TryRecvError::Closed => {
-//                             self.consumer.unwrap().close();
-//                             self.consumer = None;
-//                             return Poll::Ready(None)
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//         return Poll::Ready(None);
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
