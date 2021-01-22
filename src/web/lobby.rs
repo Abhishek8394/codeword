@@ -141,5 +141,6 @@ impl Lobby {
         // find challenge if found.
         // if passes, perform player mapping
         // else close this socket.
+        // return response to socket.
     }
 }
