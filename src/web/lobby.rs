@@ -113,7 +113,7 @@ impl Lobby {
                 eprintln!("[{}] closed ws: {:?}", self.id, id);
             },
             Err(e) => {
-                eprintln!("[{}] error closing ws: {:?}, {:?}", self.id, id, e);
+                eprintln!("[{}] error closing ws (probably closed from user side): {:?}, {:?}", self.id, id, e);
             }
         };
     }

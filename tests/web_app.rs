@@ -99,7 +99,7 @@ async fn test_player_ws_conn() {
             assert_eq!(num_test_players - n_unreg_ws, i + 1);
         }
     }
-
+    eprintln!("dropping all ws");
     drop(ws);
     tokio::time::sleep(Duration::from_millis(10)).await;
     db.drop_lobby(&lobby_id).await;
