@@ -66,6 +66,7 @@ pub async fn forwarder(
             None => break,
         }
     }
+    eprintln!("[{}] Quitting forward loop", id);
     Ok(())
 }
 
@@ -128,8 +129,12 @@ impl PlayerWebSocketConnection {
 
 
     /// Close the websocket.
-    pub async fn close(&self) -> Result<(), WebSocketError> {
-        return self.send_msg(Message::close()).await.map_err(|e|{ WebSocketError::CloseError(format!("{:?}", e))});
+    pub async fn close(&mut self) -> Result<(), WebSocketError> {
+        let res = self.send_msg(Message::close()).await.map_err(|e|{ WebSocketError::CloseError(format!("{:?}", e))});
+        self.producer = None;
+        self.fwd_pipe = None;
+        self.player_listener = None;
+        return res;
         // TODO: Other cleanup.
     }
 

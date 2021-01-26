@@ -15,7 +15,7 @@ fn hyper_bytes_to_string(b: &warp::hyper::body::Bytes) -> Result<String, String>
 
 #[tokio::test]
 async fn test_player_ws_conn() {
-    let db = InMemGameDB::new();
+    let mut db = InMemGameDB::new();
     let web_app = filters::app(db.clone());
 
     // build lobby
@@ -101,8 +101,8 @@ async fn test_player_ws_conn() {
     }
 
     drop(ws);
-    drop(lobby);
     tokio::time::sleep(Duration::from_millis(10)).await;
+    db.drop_lobby(&lobby_id).await;
     let n_lobbies = db.get_num_lobbies().await.unwrap();
-    // assert_eq!(0, n_lobbies);
+    assert_eq!(0, n_lobbies);
 }

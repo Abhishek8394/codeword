@@ -18,7 +18,7 @@ use crate::web::ws::PlayerWebSocketConnection;
 pub trait OnlinePlayer: Player + Clone + DeserializeOwned {}
 
 /// A connection to player on web
-pub type PlayerConnection = Arc<PlayerWebSocketConnection>;
+pub type PlayerConnection = Arc<RwLock<PlayerWebSocketConnection>>;
 
 /// A player in context of an web app
 #[derive(Serialize, Deserialize, Clone)]
@@ -51,14 +51,18 @@ impl WebAppPlayer {
     }
 
     pub fn set_conn(&mut self, pwsc: PlayerWebSocketConnection) {
-        self.conn = Some(Arc::new(pwsc));
+        self.conn = Some(Arc::new(RwLock::new(pwsc)));
     }
 
     pub async fn close_ws(&mut self) -> Result<(), WebSocketError> {
         if self.conn.is_none(){
             return Ok(());
         }
-        let res = self.conn.as_ref().unwrap().close().await;
+        let res;
+        {
+            let mut writer = self.conn.as_ref().unwrap().write().await;
+            res = (*writer).close().await;
+        }
         self.conn = None;
         return res;
     }
@@ -68,7 +72,8 @@ impl WebAppPlayer {
             let err_msg = format!("websocket not bound for player: {}", self.player.get_id());
             return Err(WebSocketError::WSNotFoundError(err_msg));
         }
-        return self.conn.as_ref().unwrap().send_msg(msg).await;
+        let reader = self.conn.as_ref().unwrap().read().await;
+        return (*reader).send_msg(msg).await;
     }
 }
 
@@ -89,7 +94,7 @@ impl OnlinePlayer for WebAppPlayer {}
 /// TODO: Ability to send message to a specific player.
 pub struct PlayerModem {
     player_map: Arc<RwLock<HashMap<String, Arc<RwLock<WebAppPlayer>>>>>,
-    ws_map: Arc<RwLock<HashMap<String, PlayerWebSocketConnection>>>,
+    ws_map: Arc<RwLock<HashMap<String, PlayerConnection>>>,
     ws_player_map: Arc<RwLock<HashMap<String, String>>>,
 }
 
@@ -109,7 +114,7 @@ impl PlayerModem {
 
     pub async fn add_orphan_conn(&self, player_conn: PlayerWebSocketConnection) {
         let mut writer = self.ws_map.write().await;
-        (*writer).insert(player_conn.get_id().to_string(), player_conn);
+        (*writer).insert(player_conn.get_id().to_string(), Arc::new(RwLock::new(player_conn)));
     }
 
     pub async fn relate_player_ws_conn(&self, ws_id: &str, pid: &str) {
@@ -117,7 +122,9 @@ impl PlayerModem {
         {
             let mut writer = self.ws_map.write().await;
             if let Some(conn) = (*writer).remove(ws_id){
-                pwsc = Some(conn);
+                if let Ok(pswc_lone) = Arc::try_unwrap(conn) {
+                    pwsc = Some(pswc_lone.into_inner());
+                }
             }
         }
         if pwsc.is_none() {
@@ -163,19 +170,23 @@ impl PlayerModem {
     /// Close a websocket
     pub async fn close_ws(&self, id: &str) -> Result<(), WebSocketError> {
         // if an orphan conn.
+        let mut pwsc = None;
         {
             let mut writer = self.ws_map.write().await;
-            match (*writer).get(id){
-                Some(pwsc) => {
-                    let res = pwsc.close().await;
-                    // if ws closed, remove ref to it
-                    if res.is_ok() {
-                        (*writer).remove(id);
-                    }
-                    return res;
+            match (*writer).remove(id){
+                Some(tmp) => {
+                    pwsc = Some(tmp);
                 },
                 None => {},
             };
+        }
+        {
+            if pwsc.is_some(){
+                let pwsc = pwsc.unwrap();
+                let mut writer = pwsc.write().await;
+                let res = (*writer).close().await;
+                return res;
+            }
         }
         // if on a player
         {
@@ -217,10 +228,12 @@ impl PlayerModem {
 
     /// send message to a websocket.
     pub async fn ws_send_msg(&self, ws_id: &str, msg: Message) -> Result<(), WebSocketError> {
+
         {
             let reader = self.ws_map.read().await;
             if let Some(pwsc) = (*reader).get(ws_id).as_ref() {
-                return pwsc.send_msg(msg).await;
+                let reader = pwsc.read().await;
+                return (*reader).send_msg(msg).await;
             }
         }
         {
