@@ -15,6 +15,8 @@ pub enum WSMessage{
     AuthOk,
     /// Server rejecting websocket auth.
     AuthReject,
+    /// Tile select move.
+    TileSelect(u8),
 }
 
 impl From<Message> for WSMessage{

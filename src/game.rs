@@ -6,25 +6,25 @@ use std::convert::TryInto;
 
 static TARGET_SCORE: u8 = 0;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Team {
     TeamOne,
     TeamTwo,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum WinReason {
     ScoreReached,
     OpponentDangerDraw,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum MoveResult {
     Win(Team, WinReason),
     Continue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Game<S, P: Player> {
     board: Board,
     team_one_players: HashMap<u32, P>,
@@ -37,10 +37,10 @@ pub struct Game<S, P: Player> {
     state: S,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InitialGame {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InProgressGame {}
 
 impl<S, P: Player> Game<S, P> {

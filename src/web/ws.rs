@@ -151,9 +151,6 @@ impl PlayerWebSocketConnection {
         }
         Ok(())
     }
-
-    // TODO: Plan
-    // handle disconnection.
 }
 
 #[cfg(test)]

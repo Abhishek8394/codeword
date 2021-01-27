@@ -1,4 +1,5 @@
 // use serde::{Serialize, Deserialize};
+use crate::players::SimplePlayer;
 use tokio::sync::RwLock;
 use super::players::WebAppPlayer;
 use crate::players::PlayerId;
@@ -17,10 +18,10 @@ use uuid::Uuid;
 use crate::players::Player;
 use crate::web::wsproto::{AuthResponse, WSMessage};
 
-// #[derive(Serialize, Deserialize)]
+#[derive(Clone)]
 pub enum GameWrapper {
-    InitialGame(Game<InitialGame, WebAppPlayer>),
-    InProgressGame(Game<InProgressGame, WebAppPlayer>),
+    InitialGame(Game<InitialGame, SimplePlayer>),
+    InProgressGame(Game<InProgressGame, SimplePlayer>),
 }
 
 impl GameWrapper {
@@ -28,12 +29,33 @@ impl GameWrapper {
         let g = Game::new(words)?;
         Ok(GameWrapper::InitialGame(g))
     }
+
+    pub fn is_initial(&self) -> bool {
+        match &self {
+            &GameWrapper::InitialGame(_g) => true,
+            &GameWrapper::InProgressGame(_g) => false,
+        }
+    }
+
+    pub fn begin(&self) -> Self {
+        match self{
+            Self::InitialGame(game) => {
+                let tmp = game.clone();
+                if let Ok(game) = tmp.begin(){
+                    Self::InProgressGame(game)
+                }
+                else{
+                    self.clone()
+                }
+            },
+            g => {g.clone()},
+        }
+    }
 }
 
 // #[derive(Serialize, Deserialize)]
 pub struct Lobby {
     pub id: String,
-    // player_ids: HashSet<String>,
     game: GameWrapper,
     ws_link_consumer: Option<Receiver<PlayerWebSocketMsg>>,
     ws_link_producer: Option<Sender<PlayerWebSocketMsg>>,
@@ -47,10 +69,7 @@ impl Lobby {
         let (tx, rx) = mpsc::channel(1024);
         Lobby {
             id: String::from(id),
-            // player_ids: player_ids
-            //     .iter()
-            //     .map(|x| String::from(x))
-            //     .collect::<HashSet<String>>(),
+            // game: Arc::new(RwLock::new(game)),
             game,
             ws_link_consumer: Some(rx),
             ws_link_producer: Some(tx),
@@ -123,6 +142,11 @@ impl Lobby {
         self.ws_link_producer = None;
     }
 
+    /// handles auth response message on websocket.
+    /// - find challenge if found.
+    /// - if passes, perform player mapping
+    /// - else close this socket.
+    /// - return response to socket.
     pub async fn handle_auth_resp(&self, ws_id: &str,  msg: AuthResponse){
         let pid = msg.pid;
         let mut ok = false;
@@ -146,9 +170,39 @@ impl Lobby {
             let _ = self.player_modem.ws_send_msg(ws_id, server_resp.into()).await;
             let _ = self.player_modem.close_ws(ws_id).await;
         }
-        // find challenge if found.
-        // if passes, perform player mapping
-        // else close this socket.
-        // return response to socket.
     }
+
+    pub async fn handle_tile_select_msg(&mut self, ws_id: &str, tile_num: u8) {
+        if let Some(pid) = self.player_modem.get_ws_player_id(ws_id).await{
+            if let Some(player) = self.player_modem.get_simple_player(&pid).await{
+                if self.game.is_initial() {
+                    self.game = self.game.begin();
+                }
+                match &mut self.game{
+                    GameWrapper::InitialGame(_game) => {
+                        // TODO: send not ready msg. or ignore.
+                        todo!()
+                    },
+                    GameWrapper::InProgressGame(game) => {
+                        match game.try_unravel(&player, tile_num){
+                            Ok(move_result) => {
+                                // TODO: handle states
+                                // Publish updates.
+                                println!("[{}] move result: {:?}", self.id, move_result);
+                            },
+                            Err(e) => {
+                                eprintln!("[{}] move error: {:?}", self.id, e);
+                                // TODO: Send err reply.
+                            }
+                        }
+
+                    }
+
+                }
+            };
+
+        };
+    }
+
+    // TODO: handle game moves + broadcast update.
 }

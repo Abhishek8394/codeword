@@ -41,7 +41,7 @@ fn is_bit_set(num: &u32, idx: usize) -> bool {
     num & m == m
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Board {
     words: Vec<String>,
     danger_index: u8,

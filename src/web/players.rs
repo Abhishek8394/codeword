@@ -75,6 +75,10 @@ impl WebAppPlayer {
         let reader = self.conn.as_ref().unwrap().read().await;
         return (*reader).send_msg(msg).await;
     }
+
+    pub fn get_player(&self) -> &SimplePlayer {
+        return &self.player;
+    }
 }
 
 impl From<SimplePlayer> for WebAppPlayer{
@@ -148,6 +152,24 @@ impl PlayerModem {
         let reader = self.ws_player_map.read().await;
         if let Some(pid) =  (*reader).get(ws_id){
             return Some(pid.clone());
+        }
+        return None;
+    }
+
+    /// Get web app player associated with given player id. Returned entry wrapped in `RwLock`
+    pub async fn get_web_player(&self, pid: &str) -> Option<Arc<RwLock<WebAppPlayer>>> {
+        let reader = self.player_map.read().await;
+        if let Some(player) = (*reader).get(pid) {
+            return Some(player.clone());
+        }
+        return None;
+    }
+
+    /// Get simple player associated with given player id
+    pub async fn get_simple_player(&self, pid: &str) -> Option<SimplePlayer> {
+        if let Some(web_player) = self.get_web_player(pid).await{
+            let reader = web_player.read().await;
+            return Some((*reader).get_player().clone());
         }
         return None;
     }
