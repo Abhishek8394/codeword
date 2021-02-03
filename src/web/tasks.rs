@@ -40,10 +40,11 @@ pub fn spawn_lobby_ws_listen_task(
                                 },
                                 WSMessage::AuthOk => {},
                                 WSMessage::AuthReject => {},
+                                WSMessage::UpdateState(_) => {},
                                 WSMessage::TileSelect(tile_num) => {
                                     let mut lobby_writer = lobby.write().await;
                                     (*lobby_writer).handle_tile_select_msg(&uniq_id, tile_num).await;
-                                }
+                                },
                             }
                             // TODO:
                             // - handle game msg

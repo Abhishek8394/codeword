@@ -17,6 +17,8 @@ pub enum WSMessage{
     AuthReject,
     /// Tile select move.
     TileSelect(u8),
+    /// Notification to update game state, Contains move/update id.
+    UpdateState(u32),
 }
 
 impl From<Message> for WSMessage{

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use crate::web::players::PlayerModem;
 use crate::errors::InvalidError;
-use crate::game::Game;
+use crate::game::{Game, MoveResult};
 use crate::game::InProgressGame;
 use crate::game::InitialGame;
 use crate::web::ws::PlayerWebSocketConnection;
@@ -62,6 +62,7 @@ pub struct Lobby {
     allow_conns: bool,
     player_modem: PlayerModem,
     auth_challenges: Arc<RwLock<HashMap<PlayerId, InternalAuthChallenge>>>,
+    move_update_id: u32,
 }
 
 impl Lobby {
@@ -75,7 +76,8 @@ impl Lobby {
             ws_link_producer: Some(tx),
             allow_conns: true,
             player_modem: PlayerModem::new(),
-            auth_challenges: Arc::new(RwLock::new(HashMap::new()))
+            auth_challenges: Arc::new(RwLock::new(HashMap::new())),
+            move_update_id: 0,
         }
     }
 
@@ -184,10 +186,24 @@ impl Lobby {
                         todo!()
                     },
                     GameWrapper::InProgressGame(game) => {
-                        match game.try_unravel(&player, tile_num){
+                        let move_result = game.try_unravel(&player, tile_num);
+                        match move_result{
                             Ok(move_result) => {
-                                // TODO: handle states
-                                // Publish updates.
+                                // TODO: Send confirmation to player
+                                // Update internal state
+                                self.move_update_id += 1;
+                                // Handle result states
+                                match move_result{
+                                    MoveResult::Win(ref _team, ref _reason) => {
+                                        // TODO: handle a team win
+                                    },
+                                    MoveResult::Continue => {
+                                        // Game continues
+                                        // Publish updates.
+                                        let msg = WSMessage::UpdateState(self.move_update_id);
+                                        self.player_modem.broadcast(msg.into()).await;
+                                    }
+                                }
                                 println!("[{}] move result: {:?}", self.id, move_result);
                             },
                             Err(e) => {

@@ -269,6 +269,18 @@ impl PlayerModem {
         let err_msg = format!("websocket not found: {}", ws_id);
         return Err(WebSocketError::WSNotFoundError(err_msg));
     }
+
+    /// Broadcast message to all connected & authenticated players.
+    pub async fn broadcast(&self, msg: Message) {
+        let pids: Vec<String>;
+        {
+            let reader = self.ws_player_map.read().await;
+            pids = (*reader).values().map(|pid| {pid.clone()}).collect();
+        }
+        for pid in pids.iter() {
+            let _ = self.send_player_msg(pid, msg.clone()).await;
+        }
+    }
 }
 
 mod test {
