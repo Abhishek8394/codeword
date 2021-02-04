@@ -106,3 +106,7 @@ async fn test_player_ws_conn() {
     let n_lobbies = db.get_num_lobbies().await.unwrap();
     assert_eq!(0, n_lobbies);
 }
+
+// TODO: Simulate test with concurrent players.
+// TODO: Simulate test with a game to the end.
+// TODO: Simulate test with move submissions after end.

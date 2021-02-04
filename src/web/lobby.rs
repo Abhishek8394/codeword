@@ -182,8 +182,11 @@ impl Lobby {
                 }
                 match &mut self.game{
                     GameWrapper::InitialGame(_game) => {
-                        // TODO: send not ready msg. or ignore.
-                        todo!()
+                        let msg = WSMessage::InvalidMove{reason: Some("Game not ready to start yet".to_string())};
+                        let send_res  = self.player_modem.send_player_msg(&pid, msg.into()).await;
+                        if send_res.is_err(){
+                            eprintln!("[{}] error sending response to ({}): {:?}", self.id, pid, send_res);
+                        }
                     },
                     GameWrapper::InProgressGame(game) => {
                         let move_result = game.try_unravel(&player, tile_num);
@@ -213,7 +216,7 @@ impl Lobby {
                             },
                             Err(e) => {
                                 eprintln!("[{}] move error: {:?}", self.id, e);
-                                let msg = WSMessage::InvalidMove;
+                                let msg = WSMessage::InvalidMove{reason: None};
                                 let send_res  = self.player_modem.send_player_msg(&pid, msg.into()).await;
                                 if send_res.is_err(){
                                     eprintln!("[{}] error sending response to ({}): {:?}", self.id, pid, send_res);

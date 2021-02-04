@@ -25,7 +25,9 @@ pub enum WSMessage{
         reason: String,
     },
     /// Invalid move message
-    InvalidMove,
+    InvalidMove{
+        reason: Option<String>,
+    },
 }
 
 impl From<Message> for WSMessage{
