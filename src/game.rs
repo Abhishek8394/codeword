@@ -3,6 +3,7 @@ use crate::errors::{InvalidError, InvalidMoveError};
 use crate::players::Player;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fmt::Display;
 
 static TARGET_SCORE: u8 = 0;
 
@@ -12,10 +13,33 @@ pub enum Team {
     TeamTwo,
 }
 
+impl Team{
+    pub fn get_id(&self) -> u8 {
+        match self{
+            & Self::TeamOne => 1,
+            & Self::TeamTwo => 2,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum WinReason {
     ScoreReached,
     OpponentDangerDraw,
+}
+
+impl Display for WinReason{
+    fn fmt(&self, fmtr: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> { 
+        let msg = match self{
+            Self::ScoreReached => {
+                "Score reached."
+            },
+            Self::OpponentDangerDraw => {
+                "Other team drew the danger card"
+            }
+        };
+        write!(fmtr, "{}", msg)
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

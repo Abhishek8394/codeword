@@ -19,6 +19,13 @@ pub enum WSMessage{
     TileSelect(u8),
     /// Notification to update game state, Contains move/update id.
     UpdateState(u32),
+    /// Message containing info on winning team.
+    TeamWinMessage{
+        id: u8,
+        reason: String,
+    },
+    /// Invalid move message
+    InvalidMove,
 }
 
 impl From<Message> for WSMessage{

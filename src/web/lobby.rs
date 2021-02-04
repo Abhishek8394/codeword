@@ -194,8 +194,13 @@ impl Lobby {
                                 self.move_update_id += 1;
                                 // Handle result states
                                 match move_result{
-                                    MoveResult::Win(ref _team, ref _reason) => {
-                                        // TODO: handle a team win
+                                    MoveResult::Win(ref team, ref reason) => {
+                                        let msg = WSMessage::TeamWinMessage{
+                                            id: team.get_id(),
+                                            reason: reason.to_string()
+                                        };
+                                        self.player_modem.broadcast(msg.into()).await;
+                                        self.quit().await;
                                     },
                                     MoveResult::Continue => {
                                         // Game continues
@@ -208,7 +213,11 @@ impl Lobby {
                             },
                             Err(e) => {
                                 eprintln!("[{}] move error: {:?}", self.id, e);
-                                // TODO: Send err reply.
+                                let msg = WSMessage::InvalidMove;
+                                let send_res  = self.player_modem.send_player_msg(&pid, msg.into()).await;
+                                if send_res.is_err(){
+                                    eprintln!("[{}] error sending response to ({}): {:?}", self.id, pid, send_res);
+                                }
                             }
                         }
 
