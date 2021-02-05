@@ -48,6 +48,25 @@ pub enum MoveResult {
     Continue,
 }
 
+/// Compact struct to contain dynamically changing data. Just the bits that change every turn.
+/// `Board` is not included because it varies based on player.
+pub struct DynamicGameInfoView{
+    team_one_score: u8,
+    team_two_score: u8,
+    next_turn: Option<Team>,
+}
+
+/// Relatively less frequently changing data.
+/// `Board` is not included because it varies based on player.
+pub struct GameInfoView<S>{
+    team_one_players: Vec<String>,
+    team_two_players: Vec<String>,
+    team_one_spymaster_ind: Option<usize>,
+    team_two_spymaster_ind: Option<usize>,
+    state: S,
+    stats: DynamicGameInfoView,
+}
+
 #[derive(Debug, Clone)]
 pub struct Game<S, P: Player> {
     board: Board,

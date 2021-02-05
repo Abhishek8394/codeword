@@ -41,6 +41,28 @@ fn is_bit_set(num: &u32, idx: usize) -> bool {
     num & m == m
 }
 
+pub struct DynamicPlayerViewBoard{
+    visible_team_one_indices: u32,
+    visible_team_two_indices: u32,
+    visible_grey_indices: u32,
+    visible_danger_index: Option<u8>,
+}
+
+pub struct DynamicSpyMasterViewBoard{
+    danger_index: u8,
+    grey_indices: u32,
+    team_one_indices: u32,
+    team_two_indices: u32,
+    unraveled_indices: u32,
+}
+
+pub trait PlayerView{
+    /// Get a board view that a non-spymaster player is allowed to see.
+    fn get_team_player_view(&self) -> DynamicPlayerViewBoard;
+    /// Get a board view that a spymaster player is allowed to see.
+    fn get_spymaster_view(&self) -> DynamicSpyMasterViewBoard;
+}
+
 #[derive(Debug, Clone)]
 pub struct Board {
     words: Vec<String>,
@@ -49,6 +71,32 @@ pub struct Board {
     team_one_indices: u32,
     team_two_indices: u32,
     unraveled_indices: u32,
+}
+
+impl PlayerView for Board{
+    fn get_team_player_view(&self) -> DynamicPlayerViewBoard {
+        let visible_danger_index = if is_bit_set(&self.unraveled_indices, self.danger_index.into()){
+            Some(self.danger_index)
+        } else{
+            None
+        };
+        return DynamicPlayerViewBoard{
+            visible_team_one_indices: self.team_one_indices & self.unraveled_indices,
+            visible_team_two_indices: self.team_two_indices & self.unraveled_indices,
+            visible_grey_indices: self.grey_indices & self.unraveled_indices,
+            visible_danger_index: visible_danger_index,
+        };
+    }
+    
+    fn get_spymaster_view(&self) -> DynamicSpyMasterViewBoard {
+        DynamicSpyMasterViewBoard{
+            danger_index: self.danger_index,
+            grey_indices: self.grey_indices,
+            team_one_indices: self.team_one_indices,
+            team_two_indices: self.team_two_indices,
+            unraveled_indices: self.unraveled_indices,
+        }
+    }
 }
 
 impl Board {
