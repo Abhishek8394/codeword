@@ -86,7 +86,7 @@ pub struct InitialGame {}
 #[derive(Debug, Clone)]
 pub struct InProgressGame {}
 
-impl<S, P: Player> Game<S, P> {
+impl<S: Clone, P: Player> Game<S, P> {
     pub fn get_team_one_score(&self) -> u8 {
         self.team_one_score.clone()
     }
@@ -132,6 +132,25 @@ impl<S, P: Player> Game<S, P> {
             Some(Team::TeamTwo)
         } else {
             None
+        }
+    }
+
+    pub fn get_game_info(&self) -> GameInfoView<S>{
+        GameInfoView{
+            team_one_players: self.team_one_players.values().map(|p| String::from(p.get_name())).collect(),
+            team_two_players: self.team_two_players.values().map(|p| String::from(p.get_name())).collect(),
+            team_one_spymaster_ind: self.team_one_spymaster_ind.clone(),
+            team_two_spymaster_ind: self.team_one_spymaster_ind.clone(),
+            state: self.state.clone(),
+            stats: self.get_dynamic_game_info(),
+        }
+    }
+
+    pub fn get_dynamic_game_info(&self) -> DynamicGameInfoView{
+        DynamicGameInfoView{
+            team_one_score: self.team_one_score,
+            team_two_score: self.team_two_score,
+            next_turn: self.next_turn.clone(),
         }
     }
 }
