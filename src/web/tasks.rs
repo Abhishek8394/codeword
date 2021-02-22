@@ -1,9 +1,8 @@
-use crate::web::wsproto::WSMessage;
 use crate::web::db::InMemGameDB;
 use crate::web::ws::PlayerWebSocketMsg;
+use crate::web::wsproto::WSMessage;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
-
 
 pub fn spawn_lobby_ws_listen_task(
     db: InMemGameDB,
@@ -21,32 +20,39 @@ pub fn spawn_lobby_ws_listen_task(
                         if let (uniq_id, Ok(msg)) = pws_msg {
                             {
                                 let lobby_rdr = lobby.read().await;
-                                println!("[{}] Got ({}): {:?}", (*lobby_rdr).get_id(), uniq_id, msg);
+                                println!(
+                                    "[{}] Got ({}): {:?}",
+                                    (*lobby_rdr).get_id(),
+                                    uniq_id,
+                                    msg
+                                );
                             }
-                            if msg.is_close(){
+                            if msg.is_close() {
                                 let lobby_rdr = lobby.read().await;
                                 (*lobby_rdr).close_ws(&uniq_id).await;
                                 break;
                             }
                             let ws_msg: WSMessage = msg.into();
-                            match ws_msg{
+                            match ws_msg {
                                 WSMessage::AuthResponse(auth_resp) => {
                                     let lobby_rdr = lobby.read().await;
                                     (*lobby_rdr).handle_auth_resp(&uniq_id, auth_resp).await;
                                     // tokio::task::spawn();
-                                },
+                                }
                                 WSMessage::InvalidMessage => {
                                     // do nothing. Log maybe?
-                                },
-                                WSMessage::InvalidMove{..} => {},
-                                WSMessage::AuthOk => {},
-                                WSMessage::AuthReject => {},
-                                WSMessage::UpdateState(_) => {},
-                                WSMessage::TeamWinMessage { .. } => {},
+                                }
+                                WSMessage::InvalidMove { .. } => {}
+                                WSMessage::AuthOk => {}
+                                WSMessage::AuthReject => {}
+                                WSMessage::UpdateState(_) => {}
+                                WSMessage::TeamWinMessage { .. } => {}
                                 WSMessage::TileSelect(tile_num) => {
                                     let mut lobby_writer = lobby.write().await;
-                                    (*lobby_writer).handle_tile_select_msg(&uniq_id, tile_num).await;
-                                },
+                                    (*lobby_writer)
+                                        .handle_tile_select_msg(&uniq_id, tile_num)
+                                        .await;
+                                }
                             }
                             // TODO:
                             // - handle game msg

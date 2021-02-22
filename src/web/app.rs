@@ -2,7 +2,7 @@ pub mod filters {
 
     use super::handlers;
     use crate::web::db::InMemGameDB;
-    use crate::web::cookies::SESSION_ID;
+
     use warp::filters::ws::ws;
     use warp::Filter;
 
@@ -11,7 +11,8 @@ pub mod filters {
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         return create_lobby_filter(db.clone())
             .or(create_player(db.clone()))
-            .or(player_websockets(db.clone()));
+            .or(player_websockets(db.clone()))
+            .or(get_game(db.clone()));
     }
 
     pub fn create_lobby_filter(
@@ -49,10 +50,11 @@ pub mod filters {
     }
 
     pub fn get_game(
-        db: InMemGameDB
+        db: InMemGameDB,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path!("lobby" / String / "game_info")
             .and(warp::filters::cookie::cookie("SESSION_ID"))
+            // .and(warp::any().map(|| "dummy".to_string()))
             .and(with_db(db))
             .and_then(handlers::get_game_info)
     }
@@ -66,15 +68,15 @@ pub mod filters {
 
 pub mod handlers {
 
-    use crate::web::tasks::spawn_lobby_ws_listen_task;
-    use crate::web::tasks::spawn_lobby_death_timer;
-    use crate::players::{SimplePlayer, Player};
-    use crate::web::responses::CreatePlayerResp;
-    use crate::web::lobby::Lobby;
-    use crate::web::db::InMemGameDB;
-    use crate::web::responses::{OpStatus};
-    use crate::web::lobby::GameWrapper;
+    use crate::players::{Player, SimplePlayer};
     use crate::web::cookies::gen_auth_cookie;
+    use crate::web::db::InMemGameDB;
+    use crate::web::lobby::GameWrapper;
+    use crate::web::lobby::Lobby;
+    use crate::web::responses::CreatePlayerResp;
+    use crate::web::responses::OpStatus;
+    use crate::web::tasks::spawn_lobby_death_timer;
+    use crate::web::tasks::spawn_lobby_ws_listen_task;
     use anyhow::Result;
     use std::time::Duration;
     use uuid::Uuid;
@@ -115,8 +117,7 @@ pub mod handlers {
                 return Err(warp::reject::custom(e));
             }
         };
-    }  
-
+    }
 
     pub async fn create_player(
         lobby_id: String,
@@ -135,14 +136,19 @@ pub mod handlers {
         let pid = player.get_id().clone();
         let auth_challenge = lobby_writer.add_player(player.into()).await;
         // TODO: add cookie.
-        let reply = warp::reply::json(&CreatePlayerResp{
+        let reply = warp::reply::json(&CreatePlayerResp {
             status: OpStatus::Ok,
             challenge: auth_challenge,
         });
         // TODO: store session IDs :P
         let sess_id = format!("{}_{}", pid, Uuid::new_v4().to_string());
+        let lobby_path = format!("/lobby/{}", lobby_id);
         return Ok(
-            warp::reply::with_header(reply, "set_cookie", gen_auth_cookie(&sess_id))
+            warp::reply::with_header(
+                reply,
+                "Set-Cookie",
+                gen_auth_cookie(&sess_id, false, Some(lobby_path)),
+            ), // TODO: Set to true if prod
         );
     }
 
@@ -164,8 +170,12 @@ pub mod handlers {
         }))
     }
 
-    pub async fn get_game_info(lobby_id: String, sess_id: String, db: InMemGameDB) -> Result<String, warp::Rejection> {
-        Ok("Cool".to_string())
+    pub async fn get_game_info(
+        lobby_id: String,
+        sess_id: String,
+        db: InMemGameDB,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
+        Ok(("Cool ".to_owned() + &sess_id).to_string())
     }
 
     pub fn add_player_to_team() {

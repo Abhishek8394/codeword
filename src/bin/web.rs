@@ -1,5 +1,5 @@
-use codeword::web::db::InMemGameDB;
 use codeword::web::app::filters;
+use codeword::web::db::InMemGameDB;
 use warp::Filter;
 
 #[tokio::main]

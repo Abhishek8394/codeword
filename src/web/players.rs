@@ -1,14 +1,12 @@
 use crate::players::PlayerId;
-use warp::ws::Message;
 use crate::web::errors::WebSocketError;
 use std::collections::HashMap;
 use std::sync::Arc;
+use warp::ws::Message;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{
-    RwLock,
-};
+use tokio::sync::RwLock;
 
 use crate::players::Player;
 use crate::players::SimplePlayer;
@@ -39,7 +37,6 @@ impl Player for WebAppPlayer {
     fn get_id(&self) -> &PlayerId {
         self.player.get_id()
     }
-
 }
 
 impl WebAppPlayer {
@@ -55,7 +52,7 @@ impl WebAppPlayer {
     }
 
     pub async fn close_ws(&mut self) -> Result<(), WebSocketError> {
-        if self.conn.is_none(){
+        if self.conn.is_none() {
             return Ok(());
         }
         let res;
@@ -68,7 +65,7 @@ impl WebAppPlayer {
     }
 
     pub async fn send_msg(&mut self, msg: Message) -> Result<(), WebSocketError> {
-        if self.conn.is_none(){
+        if self.conn.is_none() {
             let err_msg = format!("websocket not bound for player: {}", self.player.get_id());
             return Err(WebSocketError::WSNotFoundError(err_msg));
         }
@@ -81,11 +78,11 @@ impl WebAppPlayer {
     }
 }
 
-impl From<SimplePlayer> for WebAppPlayer{
+impl From<SimplePlayer> for WebAppPlayer {
     fn from(simple_player: SimplePlayer) -> Self {
-        Self{
+        Self {
             player: simple_player,
-            conn: None
+            conn: None,
         }
     }
 }
@@ -118,14 +115,17 @@ impl PlayerModem {
 
     pub async fn add_orphan_conn(&self, player_conn: PlayerWebSocketConnection) {
         let mut writer = self.ws_map.write().await;
-        (*writer).insert(player_conn.get_id().to_string(), Arc::new(RwLock::new(player_conn)));
+        (*writer).insert(
+            player_conn.get_id().to_string(),
+            Arc::new(RwLock::new(player_conn)),
+        );
     }
 
     pub async fn relate_player_ws_conn(&self, ws_id: &str, pid: &str) {
         let mut pwsc: Option<PlayerWebSocketConnection> = None;
         {
             let mut writer = self.ws_map.write().await;
-            if let Some(conn) = (*writer).remove(ws_id){
+            if let Some(conn) = (*writer).remove(ws_id) {
                 if let Ok(pswc_lone) = Arc::try_unwrap(conn) {
                     pwsc = Some(pswc_lone.into_inner());
                 }
@@ -140,7 +140,7 @@ impl PlayerModem {
         }
         {
             let reader = self.player_map.read().await;
-            if let Some(player) = (*reader).get(pid){
+            if let Some(player) = (*reader).get(pid) {
                 let mut player_writer = player.write().await;
                 eprintln!("player {} connected via {}", pid, ws_id);
                 (*player_writer).set_conn(pwsc.unwrap());
@@ -148,9 +148,9 @@ impl PlayerModem {
         }
     }
 
-    pub async fn get_ws_player_id(&self, ws_id: &str) -> Option<String>{
+    pub async fn get_ws_player_id(&self, ws_id: &str) -> Option<String> {
         let reader = self.ws_player_map.read().await;
-        if let Some(pid) =  (*reader).get(ws_id){
+        if let Some(pid) = (*reader).get(ws_id) {
             return Some(pid.clone());
         }
         return None;
@@ -167,7 +167,7 @@ impl PlayerModem {
 
     /// Get simple player associated with given player id
     pub async fn get_simple_player(&self, pid: &str) -> Option<SimplePlayer> {
-        if let Some(web_player) = self.get_web_player(pid).await{
+        if let Some(web_player) = self.get_web_player(pid).await {
             let reader = web_player.read().await;
             return Some((*reader).get_player().clone());
         }
@@ -195,15 +195,15 @@ impl PlayerModem {
         let mut pwsc = None;
         {
             let mut writer = self.ws_map.write().await;
-            match (*writer).remove(id){
+            match (*writer).remove(id) {
                 Some(tmp) => {
                     pwsc = Some(tmp);
-                },
-                None => {},
+                }
+                None => {}
             };
         }
         {
-            if pwsc.is_some(){
+            if pwsc.is_some() {
                 let pwsc = pwsc.unwrap();
                 let mut writer = pwsc.write().await;
                 let res = (*writer).close().await;
@@ -212,25 +212,25 @@ impl PlayerModem {
         }
         // if on a player
         {
-            match self.get_ws_player_id(id).await{
+            match self.get_ws_player_id(id).await {
                 Some(pid) => {
                     {
                         let rdr = self.player_map.read().await;
-                        match (*rdr).get(&pid){
+                        match (*rdr).get(&pid) {
                             Some(player_rw) => {
                                 let mut player = player_rw.write().await;
                                 let res = player.close_ws().await;
                                 // if ws closed, remove mapping.
-                                if res.is_ok(){
+                                if res.is_ok() {
                                     self.remove_ws_player_mapping(id).await;
                                 }
                                 return res;
-                            },
-                            None => {},
+                            }
+                            None => {}
                         };
                     }
-                },
-                None => {},
+                }
+                None => {}
             }
         }
         return Ok(());
@@ -239,7 +239,7 @@ impl PlayerModem {
     pub async fn send_player_msg(&self, pid: &str, msg: Message) -> Result<(), WebSocketError> {
         {
             let reader = self.player_map.read().await;
-            if let Some(player) = (*reader).get(pid){
+            if let Some(player) = (*reader).get(pid) {
                 let mut writer = player.write().await;
                 return (*writer).send_msg(msg).await;
             }
@@ -250,7 +250,6 @@ impl PlayerModem {
 
     /// send message to a websocket.
     pub async fn ws_send_msg(&self, ws_id: &str, msg: Message) -> Result<(), WebSocketError> {
-
         {
             let reader = self.ws_map.read().await;
             if let Some(pwsc) = (*reader).get(ws_id).as_ref() {
@@ -259,10 +258,10 @@ impl PlayerModem {
             }
         }
         {
-            match self.get_ws_player_id(ws_id).await{
+            match self.get_ws_player_id(ws_id).await {
                 Some(pid) => {
                     return self.send_player_msg(&pid, msg).await;
-                },
+                }
                 None => {}
             }
         }
@@ -275,7 +274,7 @@ impl PlayerModem {
         let pids: Vec<String>;
         {
             let reader = self.ws_player_map.read().await;
-            pids = (*reader).values().map(|pid| {pid.clone()}).collect();
+            pids = (*reader).values().map(|pid| pid.clone()).collect();
         }
         for pid in pids.iter() {
             let _ = self.send_player_msg(pid, msg.clone()).await;

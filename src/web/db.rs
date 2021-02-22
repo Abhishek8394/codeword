@@ -55,7 +55,7 @@ impl InMemGameDB {
 
     pub async fn drop_lobby(&mut self, lobby_id: &str) {
         let mut w1 = self.db.write().await;
-        if let Some(lobby) = (*w1).remove(lobby_id){
+        if let Some(lobby) = (*w1).remove(lobby_id) {
             {
                 let mut writer = lobby.write().await;
                 (writer).quit().await;

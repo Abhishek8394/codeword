@@ -13,11 +13,11 @@ pub enum Team {
     TeamTwo,
 }
 
-impl Team{
+impl Team {
     pub fn get_id(&self) -> u8 {
-        match self{
-            & Self::TeamOne => 1,
-            & Self::TeamTwo => 2,
+        match self {
+            &Self::TeamOne => 1,
+            &Self::TeamTwo => 2,
         }
     }
 }
@@ -28,15 +28,11 @@ pub enum WinReason {
     OpponentDangerDraw,
 }
 
-impl Display for WinReason{
-    fn fmt(&self, fmtr: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> { 
-        let msg = match self{
-            Self::ScoreReached => {
-                "Score reached."
-            },
-            Self::OpponentDangerDraw => {
-                "Other team drew the danger card"
-            }
+impl Display for WinReason {
+    fn fmt(&self, fmtr: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let msg = match self {
+            Self::ScoreReached => "Score reached.",
+            Self::OpponentDangerDraw => "Other team drew the danger card",
         };
         write!(fmtr, "{}", msg)
     }
@@ -50,7 +46,7 @@ pub enum MoveResult {
 
 /// Compact struct to contain dynamically changing data. Just the bits that change every turn.
 /// `Board` is not included because it varies based on player.
-pub struct DynamicGameInfoView{
+pub struct DynamicGameInfoView {
     team_one_score: u8,
     team_two_score: u8,
     next_turn: Option<Team>,
@@ -58,7 +54,7 @@ pub struct DynamicGameInfoView{
 
 /// Relatively less frequently changing data.
 /// `Board` is not included because it varies based on player.
-pub struct GameInfoView<S>{
+pub struct GameInfoView<S> {
     team_one_players: Vec<String>,
     team_two_players: Vec<String>,
     team_one_spymaster_ind: Option<usize>,
@@ -135,10 +131,18 @@ impl<S: Clone, P: Player> Game<S, P> {
         }
     }
 
-    pub fn get_game_info(&self) -> GameInfoView<S>{
-        GameInfoView{
-            team_one_players: self.team_one_players.values().map(|p| String::from(p.get_name())).collect(),
-            team_two_players: self.team_two_players.values().map(|p| String::from(p.get_name())).collect(),
+    pub fn get_game_info(&self) -> GameInfoView<S> {
+        GameInfoView {
+            team_one_players: self
+                .team_one_players
+                .values()
+                .map(|p| String::from(p.get_name()))
+                .collect(),
+            team_two_players: self
+                .team_two_players
+                .values()
+                .map(|p| String::from(p.get_name()))
+                .collect(),
             team_one_spymaster_ind: self.team_one_spymaster_ind.clone(),
             team_two_spymaster_ind: self.team_one_spymaster_ind.clone(),
             state: self.state.clone(),
@@ -146,8 +150,8 @@ impl<S: Clone, P: Player> Game<S, P> {
         }
     }
 
-    pub fn get_dynamic_game_info(&self) -> DynamicGameInfoView{
-        DynamicGameInfoView{
+    pub fn get_dynamic_game_info(&self) -> DynamicGameInfoView {
+        DynamicGameInfoView {
             team_one_score: self.team_one_score,
             team_two_score: self.team_two_score,
             next_turn: self.next_turn.clone(),

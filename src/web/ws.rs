@@ -7,9 +7,9 @@ use tokio::sync::{
     mpsc::{self, Sender},
     Mutex,
 };
+use tokio_stream::wrappers::ReceiverStream;
 use warp::ws::Message;
 use warp::ws::WebSocket;
-use tokio_stream::wrappers::ReceiverStream;
 
 /// websocket msg from a player. (websocket id, ws message.)
 pub type WebSocketStreamItem = Result<Message, warp::Error>;
@@ -111,7 +111,9 @@ impl PlayerWebSocketConnection {
         rcv_fwd: Sender<PlayerWebSocketMsg>,
     ) -> Result<(), WebSocketError> {
         if self.player_listener.is_none() {
-            return Err(WebSocketError::PipeSetupError("Forwarding already setup elsewhere".to_string()));
+            return Err(WebSocketError::PipeSetupError(
+                "Forwarding already setup elsewhere".to_string(),
+            ));
         }
         self.fwd_pipe = Some(rcv_fwd);
         tokio::task::spawn(forwarder(
@@ -127,10 +129,12 @@ impl PlayerWebSocketConnection {
         &self.id
     }
 
-
     /// Close the websocket.
     pub async fn close(&mut self) -> Result<(), WebSocketError> {
-        let res = self.send_msg(Message::close()).await.map_err(|e|{ WebSocketError::CloseError(format!("{:?}", e))});
+        let res = self
+            .send_msg(Message::close())
+            .await
+            .map_err(|e| WebSocketError::CloseError(format!("{:?}", e)));
         self.producer = None;
         self.fwd_pipe = None;
         self.player_listener = None;
@@ -140,14 +144,12 @@ impl PlayerWebSocketConnection {
 
     /// Send a message to websocket.
     pub async fn send_msg(&self, msg: Message) -> Result<(), WebSocketError> {
-        if self.producer.is_some(){
+        if self.producer.is_some() {
             let producer = self.producer.as_ref().unwrap().lock().await;
-            return match (*producer).send(Ok(msg)).await{
+            return match (*producer).send(Ok(msg)).await {
                 Ok(_) => Ok(()),
-                Err(e) => {
-                    Err(WebSocketError::SendError(e.to_string()))
-                }
-            }
+                Err(e) => Err(WebSocketError::SendError(e.to_string())),
+            };
         }
         Ok(())
     }

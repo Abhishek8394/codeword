@@ -1,13 +1,12 @@
 // Larger integration type tests for web app.
 
-
-use std::time::Duration;
-use codeword::web::wsproto::WSMessage;
 use codeword::web::wsproto::AuthResponse;
+use codeword::web::wsproto::WSMessage;
+use std::time::Duration;
 
-use codeword::web::responses::CreatePlayerResp;
-use codeword::web::db::InMemGameDB;
 use codeword::web::app::filters;
+use codeword::web::db::InMemGameDB;
+use codeword::web::responses::CreatePlayerResp;
 
 fn hyper_bytes_to_string(b: &warp::hyper::body::Bytes) -> Result<String, String> {
     Ok(String::from_utf8(b.to_vec()).unwrap())
@@ -35,7 +34,7 @@ async fn test_player_ws_conn() {
     let mut ws = vec![];
     let num_test_players = 3;
     assert!(num_test_players >= 2);
-    for i in 0..num_test_players{
+    for i in 0..num_test_players {
         let player_name = format!("player-{}", i);
         let player_req_body = format!("{{\"name\": \"{}\"}}", player_name);
         // connect player
@@ -46,9 +45,9 @@ async fn test_player_ws_conn() {
             .reply(&web_app)
             .await;
         let p1 = serde_json::from_str(
-                &hyper_bytes_to_string(p1.body())
-                .expect("cannot parse playe resp")
-            ).expect("cannot conv player resp to json");
+            &hyper_bytes_to_string(p1.body()).expect("cannot parse playe resp"),
+        )
+        .expect("cannot conv player resp to json");
         players.push(p1);
 
         // connect ws
@@ -60,7 +59,10 @@ async fn test_player_ws_conn() {
         ws.push(w);
     }
     // pre auth connection checks.
-    let lobby = db.get_lobby(&lobby_id).await.expect("lobby not found in db");
+    let lobby = db
+        .get_lobby(&lobby_id)
+        .await
+        .expect("lobby not found in db");
     {
         let lobby_rdr = lobby.read().await;
         let n_players = (*lobby_rdr).get_num_players().await;
@@ -72,22 +74,27 @@ async fn test_player_ws_conn() {
     let num_holdout = 1;
     assert!(num_holdout < num_test_players);
     // auth all except last one.
-    for i in 0..(num_test_players - num_holdout){
+    for i in 0..(num_test_players - num_holdout) {
         let player = &players[i];
         let challenge = &player.challenge;
         // since an echo challenge, send it back as is.
         let challenge_ans = &challenge.challenge;
         // send auth.
         let web_sock = &mut ws[i];
-        let ws_msg = serde_json::to_string(&WSMessage::AuthResponse(AuthResponse{
+        let ws_msg = serde_json::to_string(&WSMessage::AuthResponse(AuthResponse {
             pid: challenge.pid,
             response: challenge_ans.clone(),
-        })).unwrap();
+        }))
+        .unwrap();
         web_sock.send_text(ws_msg).await;
         {
-            let resp: WSMessage = web_sock.recv().await.expect("didn't get message from server").into();
-            match resp{
-                WSMessage::AuthOk => {},
+            let resp: WSMessage = web_sock
+                .recv()
+                .await
+                .expect("didn't get message from server")
+                .into();
+            match resp {
+                WSMessage::AuthOk => {}
                 s => {
                     eprintln!("{:?}", s);
                     assert!(false, "Auth failed");
