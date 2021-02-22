@@ -2,6 +2,7 @@ pub mod filters {
 
     use super::handlers;
     use crate::web::db::InMemGameDB;
+    use crate::web::cookies::SESSION_ID;
     use warp::filters::ws::ws;
     use warp::Filter;
 
@@ -47,6 +48,15 @@ pub mod filters {
             .and_then(handlers::handle_ws_conn)
     }
 
+    pub fn get_game(
+        db: InMemGameDB
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::path!("lobby" / String / "game_info")
+            .and(warp::filters::cookie::cookie("SESSION_ID"))
+            .and(with_db(db))
+            .and_then(handlers::get_game_info)
+    }
+
     fn with_db(
         db: InMemGameDB,
     ) -> impl Filter<Extract = (InMemGameDB,), Error = std::convert::Infallible> + Clone {
@@ -58,12 +68,13 @@ pub mod handlers {
 
     use crate::web::tasks::spawn_lobby_ws_listen_task;
     use crate::web::tasks::spawn_lobby_death_timer;
-    use crate::players::SimplePlayer;
+    use crate::players::{SimplePlayer, Player};
     use crate::web::responses::CreatePlayerResp;
     use crate::web::lobby::Lobby;
     use crate::web::db::InMemGameDB;
     use crate::web::responses::{OpStatus};
     use crate::web::lobby::GameWrapper;
+    use crate::web::cookies::gen_auth_cookie;
     use anyhow::Result;
     use std::time::Duration;
     use uuid::Uuid;
@@ -104,7 +115,8 @@ pub mod handlers {
                 return Err(warp::reject::custom(e));
             }
         };
-    }
+    }  
+
 
     pub async fn create_player(
         lobby_id: String,
@@ -120,11 +132,18 @@ pub mod handlers {
         let lobby_writer = lobby.read().await;
         let num_players = lobby_writer.get_num_players().await;
         player.set_id(num_players as u32);
+        let pid = player.get_id().clone();
         let auth_challenge = lobby_writer.add_player(player.into()).await;
-        return Ok(warp::reply::json(&CreatePlayerResp{
-                    status: OpStatus::Ok,
-                    challenge: auth_challenge,
-                }));
+        // TODO: add cookie.
+        let reply = warp::reply::json(&CreatePlayerResp{
+            status: OpStatus::Ok,
+            challenge: auth_challenge,
+        });
+        // TODO: store session IDs :P
+        let sess_id = format!("{}_{}", pid, Uuid::new_v4().to_string());
+        return Ok(
+            warp::reply::with_header(reply, "set_cookie", gen_auth_cookie(&sess_id))
+        );
     }
 
     pub async fn handle_ws_conn(
@@ -143,6 +162,10 @@ pub mod handlers {
             let mut lobby_writer = lobby.write().await;
             (*lobby_writer).handle_incoming_ws(websocket).await;
         }))
+    }
+
+    pub async fn get_game_info(lobby_id: String, sess_id: String, db: InMemGameDB) -> Result<String, warp::Rejection> {
+        Ok("Cool".to_string())
     }
 
     pub fn add_player_to_team() {
