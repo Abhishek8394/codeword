@@ -2,6 +2,7 @@
 
 use codeword::web::wsproto::AuthResponse;
 use codeword::web::wsproto::WSMessage;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use codeword::web::app::filters;
@@ -10,6 +11,47 @@ use codeword::web::responses::CreatePlayerResp;
 
 fn hyper_bytes_to_string(b: &warp::hyper::body::Bytes) -> Result<String, String> {
     Ok(String::from_utf8(b.to_vec()).unwrap())
+}
+
+pub struct Cookie {
+    key_values: HashMap<String, String>,
+    flags: HashSet<String>,
+}
+
+impl Cookie {
+    pub fn has_field(&self, key: &str) -> bool {
+        self.key_values.contains_key(key)
+    }
+
+    pub fn get_field(&self, key: &str) -> Option<&String> {
+        self.key_values.get(key)
+    }
+
+    pub fn has_flag(&self, key: &str) -> bool {
+        self.flags.contains(key)
+    }
+}
+
+fn parse_cookies(header_str: &str) -> Cookie {
+    let mut cookie_fields: HashMap<String, String> = HashMap::new();
+    let mut cookie_flags: HashSet<String> = HashSet::new();
+    for field in header_str.split(";") {
+        let ind = field.trim().find("=");
+        match ind {
+            Some(ind) => {
+                let key = &field[0..ind];
+                let value = &field[ind + 1..];
+                cookie_fields.insert(key.to_string(), value.to_string());
+            }
+            None => {
+                cookie_flags.insert(field.to_string());
+            }
+        };
+    }
+    return Cookie {
+        key_values: cookie_fields,
+        flags: cookie_flags,
+    };
 }
 
 #[tokio::test]
@@ -44,6 +86,24 @@ async fn test_player_ws_conn() {
             .body(&player_req_body)
             .reply(&web_app)
             .await;
+        let p1_cookie = p1
+            .headers()
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .expect("Error getting cookie string");
+        let cookie = parse_cookies(p1_cookie);
+        assert!(cookie.has_field("SESSION_ID"));
+        assert!(cookie.has_field("Max-age"));
+        assert_eq!(
+            format!("/lobby/{}", lobby_id),
+            cookie.get_field("path").unwrap().clone()
+        );
+        assert_eq!(
+            "Strict".to_string(),
+            cookie.get_field("SameSite").unwrap().clone()
+        );
+
         let p1 = serde_json::from_str(
             &hyper_bytes_to_string(p1.body()).expect("cannot parse playe resp"),
         )
