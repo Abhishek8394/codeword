@@ -1,46 +1,53 @@
 pub mod filters {
 
     use super::handlers;
-    use crate::web::db::InMemGameDB;
+    use crate::web::db::{InMemGameDB, InMemSessionStore};
 
     use warp::filters::ws::ws;
     use warp::Filter;
 
     pub fn app(
         db: InMemGameDB,
+        sess: InMemSessionStore,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        return create_lobby_filter(db.clone())
-            .or(create_player(db.clone()))
-            .or(player_websockets(db.clone()))
-            .or(get_game(db.clone()));
+        return create_lobby_filter(db.clone(), sess.clone())
+            .or(create_player(db.clone(), sess.clone()))
+            .or(player_websockets(db.clone(), sess.clone()))
+            .or(get_game(db.clone(), sess.clone()));
     }
 
     pub fn create_lobby_filter(
         db: InMemGameDB,
+        sess: InMemSessionStore,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         return warp::path!("lobby")
             .and(warp::filters::method::post())
             .and(with_db(db))
+            .and(with_sess(sess))
             .and_then(handlers::create_lobby);
     }
 
     pub fn create_player(
         db: InMemGameDB,
+        sess: InMemSessionStore,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path!("lobby" / String / "players")
             .and(warp::path::end())
             .and(warp::filters::method::post())
             .and(warp::body::json())
             .and(with_db(db))
+            .and(with_sess(sess))
             .and_then(handlers::create_player)
     }
 
     pub fn player_websockets(
         db: InMemGameDB,
+        sess: InMemSessionStore,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path!("lobby" / String / "ws")
             .and(ws())
             .and(with_db(db))
+            .and(with_sess(sess))
             // .map(|lobby_id: String, ws: warp::ws::Ws, db: InMemGameDB| {
             //     ws.on_upgrade(|websocket|async move {
             //         println!("CONNECTED!");
@@ -51,11 +58,13 @@ pub mod filters {
 
     pub fn get_game(
         db: InMemGameDB,
+        sess: InMemSessionStore,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path!("lobby" / String / "game_info")
             .and(warp::filters::cookie::cookie("SESSION_ID"))
             // .and(warp::any().map(|| "dummy".to_string()))
             .and(with_db(db))
+            .and(with_sess(sess))
             .and_then(handlers::get_game_info)
     }
 
@@ -64,10 +73,17 @@ pub mod filters {
     ) -> impl Filter<Extract = (InMemGameDB,), Error = std::convert::Infallible> + Clone {
         warp::any().map(move || db.clone())
     }
+
+    fn with_sess(
+        sess: InMemSessionStore,
+    ) -> impl Filter<Extract = (InMemSessionStore,), Error = std::convert::Infallible> + Clone {
+        warp::any().map(move || sess.clone())
+    }
 }
 
 pub mod handlers {
 
+    use crate::web::db::InMemSessionStore;
     use crate::players::{Player, SimplePlayer};
     use crate::web::cookies::gen_auth_cookie;
     use crate::web::db::InMemGameDB;
@@ -85,7 +101,7 @@ pub mod handlers {
         return Uuid::new_v4().to_string();
     }
 
-    pub async fn create_lobby(db: InMemGameDB) -> Result<impl warp::Reply, warp::Rejection> {
+    pub async fn create_lobby(db: InMemGameDB, _sess: InMemSessionStore) -> Result<impl warp::Reply, warp::Rejection> {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
         // let game = GameWrapper::new(&words).unwrap();
         let game = match GameWrapper::new(&words) {
@@ -123,6 +139,7 @@ pub mod handlers {
         lobby_id: String,
         mut player: SimplePlayer,
         db: InMemGameDB,
+        sess: InMemSessionStore
     ) -> Result<impl warp::Reply, warp::Rejection> {
         let lobby_res = db.get_lobby(&lobby_id).await;
         if lobby_res.is_err() {
@@ -140,8 +157,8 @@ pub mod handlers {
             status: OpStatus::Ok,
             challenge: auth_challenge,
         });
-        // TODO: store session IDs :P
         let sess_id = format!("{}_{}", pid, Uuid::new_v4().to_string());
+        sess.insert(sess_id.clone(), format!("{}", pid)).await;
         let lobby_path = format!("/lobby/{}", lobby_id);
         return Ok(
             warp::reply::with_header(
@@ -156,6 +173,7 @@ pub mod handlers {
         lobby_id: String,
         ws: warp::ws::Ws,
         db: InMemGameDB,
+        _sess: InMemSessionStore
     ) -> Result<impl warp::Reply, warp::Rejection> {
         let lobby_res = db.get_lobby(&lobby_id).await;
         if lobby_res.is_err() {
@@ -174,6 +192,7 @@ pub mod handlers {
         lobby_id: String,
         sess_id: String,
         db: InMemGameDB,
+        sess: InMemSessionStore
     ) -> Result<impl warp::Reply, warp::Rejection> {
         Ok(("Cool ".to_owned() + &sess_id).to_string())
     }
@@ -217,13 +236,14 @@ pub mod handlers {
 #[cfg(test)]
 mod tests {
 
+    use crate::web::db::{InMemGameDB, InMemSessionStore};
     use super::filters::*;
-    use crate::web::db::InMemGameDB;
 
     #[tokio::test]
     async fn test_ws_conn() {
         let mut db = InMemGameDB::new();
-        let new_lobby_route = create_lobby_filter(db.clone());
+        let sess = InMemSessionStore::new();
+        let new_lobby_route = create_lobby_filter(db.clone(), sess.clone());
         let res = warp::test::request()
             .path("/lobby")
             .method("POST")
@@ -231,7 +251,7 @@ mod tests {
             .await;
         let lobby_id = String::from_utf8(res.body().to_vec()).expect("Response encoding error");
         // assert!(db.get_num_get_num_lobbies().await, Ok(1));
-        let route = player_websockets(db.clone());
+        let route = player_websockets(db.clone(), sess.clone());
         let ws_path = format!("/lobby/{}/ws", &lobby_id);
         println!("WS: {}", ws_path);
         let _client = warp::test::ws()

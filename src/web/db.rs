@@ -63,3 +63,33 @@ impl InMemGameDB {
         }
     }
 }
+
+
+/// This is only for testing. A simple hashmap based util. Use with redis or something in prod.
+#[derive(Clone)]
+pub struct InMemSessionStore{
+    db: Arc<RwLock<HashMap<String, String>>>,
+}
+
+impl InMemSessionStore{
+    pub fn new() -> Self{
+        InMemSessionStore{
+            db: Arc::new(RwLock::new(HashMap::new()))
+        }
+    }
+
+    pub async fn get(&self, key: &str) -> Option<String>{
+        let reader = self.db.read().await;
+        if let Some(val) = (*reader).get(key){
+            return Some(val.clone());
+        }
+        None
+    }
+
+    pub async fn insert(&self, key: String, val: String) {
+        let mut writer = self.db.write().await;
+        (*writer).insert(key, val);
+    }
+}
+
+
