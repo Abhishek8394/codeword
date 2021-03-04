@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use codeword::web::app::filters;
-use codeword::web::db::InMemGameDB;
+use codeword::web::db::{InMemGameDB, InMemSessionStore};
 use codeword::web::responses::CreatePlayerResp;
 
 fn hyper_bytes_to_string(b: &warp::hyper::body::Bytes) -> Result<String, String> {
@@ -57,7 +57,8 @@ fn parse_cookies(header_str: &str) -> Cookie {
 #[tokio::test]
 async fn test_player_ws_conn() {
     let mut db = InMemGameDB::new();
-    let web_app = filters::app(db.clone());
+    let sess = InMemSessionStore::new();
+    let web_app = filters::app(db.clone(), sess.clone());
 
     // build lobby
     let req = warp::test::request()
