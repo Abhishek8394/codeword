@@ -41,14 +41,14 @@ fn is_bit_set(num: &u32, idx: usize) -> bool {
     num & m == m
 }
 
-pub struct DynamicPlayerViewBoard {
+pub struct PlayerBoardView {
     visible_team_one_indices: u32,
     visible_team_two_indices: u32,
     visible_grey_indices: u32,
     visible_danger_index: Option<u8>,
 }
 
-pub struct DynamicSpyMasterViewBoard {
+pub struct SpyMasterBoardView {
     danger_index: u8,
     grey_indices: u32,
     team_one_indices: u32,
@@ -56,11 +56,16 @@ pub struct DynamicSpyMasterViewBoard {
     unraveled_indices: u32,
 }
 
+pub enum BoardView{
+    PlayerView (PlayerBoardView),
+    SpyMasterView (SpyMasterBoardView),
+}
+
 pub trait PlayerView {
     /// Get a board view that a non-spymaster player is allowed to see.
-    fn get_team_player_view(&self) -> DynamicPlayerViewBoard;
+    fn get_regular_player_view(&self) -> PlayerBoardView;
     /// Get a board view that a spymaster player is allowed to see.
-    fn get_spymaster_view(&self) -> DynamicSpyMasterViewBoard;
+    fn get_spymaster_view(&self) -> SpyMasterBoardView;
 }
 
 #[derive(Debug, Clone)]
@@ -74,14 +79,14 @@ pub struct Board {
 }
 
 impl PlayerView for Board {
-    fn get_team_player_view(&self) -> DynamicPlayerViewBoard {
+    fn get_regular_player_view(&self) -> PlayerBoardView {
         let visible_danger_index = if is_bit_set(&self.unraveled_indices, self.danger_index.into())
         {
             Some(self.danger_index)
         } else {
             None
         };
-        return DynamicPlayerViewBoard {
+        return PlayerBoardView {
             visible_team_one_indices: self.team_one_indices & self.unraveled_indices,
             visible_team_two_indices: self.team_two_indices & self.unraveled_indices,
             visible_grey_indices: self.grey_indices & self.unraveled_indices,
@@ -89,8 +94,8 @@ impl PlayerView for Board {
         };
     }
 
-    fn get_spymaster_view(&self) -> DynamicSpyMasterViewBoard {
-        DynamicSpyMasterViewBoard {
+    fn get_spymaster_view(&self) -> SpyMasterBoardView {
+        SpyMasterBoardView {
             danger_index: self.danger_index,
             grey_indices: self.grey_indices,
             team_one_indices: self.team_one_indices,

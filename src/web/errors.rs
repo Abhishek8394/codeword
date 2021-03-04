@@ -31,6 +31,8 @@ impl ForwardingError {
     }
 }
 
+pub type NotAllowedError = InvalidError;
+
 #[derive(Debug, Clone)]
 pub enum WebSocketError {
     /// Error closing it

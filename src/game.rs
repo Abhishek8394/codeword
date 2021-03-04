@@ -1,4 +1,5 @@
-use crate::board::Board;
+use crate::players::PlayerId;
+use crate::board::{Board, BoardView, PlayerView};
 use crate::errors::{InvalidError, InvalidMoveError};
 use crate::players::Player;
 use std::collections::HashMap;
@@ -62,6 +63,13 @@ pub struct GameInfoView<S> {
     state: S,
     stats: DynamicGameInfoView,
 }
+
+pub struct FullGameInfoView<S> {
+    game_info: GameInfoView<S>,
+    board: BoardView,
+}
+
+pub type FullGameInfoViewResult<S> = Result<FullGameInfoView<S>, InvalidError>;
 
 #[derive(Debug, Clone)]
 pub struct Game<S, P: Player> {
@@ -150,6 +158,38 @@ impl<S: Clone, P: Player> Game<S, P> {
         }
     }
 
+    pub fn has_player(&self, pid: &PlayerId) -> bool {
+        self.team_one_players.contains_key(&pid) || self.team_two_players.contains_key(&pid)
+    }
+
+    pub fn is_team_one_spymaster(&self, pid: &PlayerId) -> bool {
+        self.team_one_spymaster_ind.is_some() && *(self.team_one_spymaster_ind.as_ref().unwrap()) as u32 == *pid
+    }
+
+    pub fn is_team_two_spymaster(&self, pid: &PlayerId) -> bool {
+        self.team_two_spymaster_ind.is_some() && *(self.team_two_spymaster_ind.as_ref().unwrap()) as u32 == *pid
+    }
+
+    pub fn get_full_game_info(&self, player: &P) -> Result<FullGameInfoView<S>, InvalidError> {
+        let pid = player.get_id();
+        if !self.has_player(&pid){
+            return Err(InvalidError::new("Invalid player"));
+        }
+        let mut board_view: BoardView;
+        if self.is_team_one_spymaster(&pid) || self.is_team_two_spymaster(&pid){
+            board_view = BoardView::SpyMasterView(self.board.get_spymaster_view());
+        }
+        else{
+            board_view = BoardView::PlayerView(self.board.get_regular_player_view());
+        }
+        let game_info = self.get_game_info();
+        return Ok(FullGameInfoView{
+                    game_info,
+                    board: board_view,
+                });
+
+    }
+
     pub fn get_dynamic_game_info(&self) -> DynamicGameInfoView {
         DynamicGameInfoView {
             team_one_score: self.team_one_score,
@@ -192,6 +232,10 @@ impl<P: Player> Game<InitialGame, P> {
         return Err(InvalidError::new(
             "Not enough players. Each team needs 2 players atleast and a chosen spymaster.",
         ));
+    }
+ 
+    pub fn get_initial_full_game_info(&self, player: &P) -> Result<FullGameInfoView<InitialGame>, InvalidError>{
+        return self.get_full_game_info(&player);
     }
 }
 
@@ -278,6 +322,10 @@ impl<P: Player> Game<InProgressGame, P> {
             return Ok(move_result);
         }
         return Err(InvalidMoveError::new("Not the current team's turn"));
+    }
+
+    pub fn get_in_progress_full_game_info(&self, player: &P) -> Result<FullGameInfoView<InProgressGame>, InvalidError>{
+        return self.get_full_game_info(&player);
     }
 }
 

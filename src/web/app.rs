@@ -52,7 +52,7 @@ pub mod filters {
     pub fn get_game(
         db: InMemGameDB,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path!("lobby" / String / "game_info")
+        warp::path!("lobby" / String / "gameInfo")
             .and(warp::filters::cookie::cookie("SESSION_ID"))
             // .and(warp::any().map(|| "dummy".to_string()))
             .and(with_db(db))
@@ -175,7 +175,14 @@ pub mod handlers {
         sess_id: String,
         db: InMemGameDB,
     ) -> Result<impl warp::Reply, warp::Rejection> {
-        Ok(("Cool ".to_owned() + &sess_id).to_string())
+        let lobby_res = db.get_lobby(&lobby_id).await;
+        if lobby_res.is_err() {
+            return Err(warp::reject::not_found());
+        }
+
+        let lobby = lobby_res.unwrap();
+        // let view = get_player_full_game_view(&pid);
+        return Ok(String::from("TODO"));
     }
 
     pub fn add_player_to_team() {

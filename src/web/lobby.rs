@@ -1,4 +1,7 @@
 // use serde::{Serialize, Deserialize};
+use crate::game::FullGameInfoViewResult;
+use crate::web::errors::NotAllowedError;
+use crate::game::FullGameInfoView;
 use super::players::WebAppPlayer;
 use crate::errors::InvalidError;
 use crate::game::InProgressGame;
@@ -17,6 +20,13 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+// #[derive(Clone)]
+pub enum GameViewWrapper {
+    InitialFullGameView(FullGameInfoView<InitialGame>),
+    InProgressFullGameView(FullGameInfoView<InProgressGame>),
+    // InitialGameView(FullGameInfoView<InitialGame>),
+}
 
 #[derive(Clone)]
 pub enum GameWrapper {
@@ -48,6 +58,19 @@ impl GameWrapper {
                 }
             }
             g => g.clone(),
+        }
+    }
+
+    pub fn get_full_game_info(&self, player: &SimplePlayer) -> Result<GameViewWrapper, InvalidError>{
+        match &self {
+            &GameWrapper::InitialGame(g) => match g.get_initial_full_game_info(&player){
+                Ok(g) => Ok(GameViewWrapper::InitialFullGameView(g)),
+                Err(e) => Err(e),
+            },
+            &GameWrapper::InProgressGame(g) => match g.get_in_progress_full_game_info(&player){
+                Ok(g) => Ok(GameViewWrapper::InProgressFullGameView(g)),
+                Err(e) => Err(e),
+            },
         }
     }
 }
@@ -182,6 +205,17 @@ impl Lobby {
                 .await;
             let _ = self.player_modem.close_ws(ws_id).await;
         }
+    }
+
+    /// Get game view based on player id.0
+    pub async fn get_player_full_game_view(&self, pid: &str) -> Result<GameViewWrapper, NotAllowedError> {
+        if let Some(player) = self.player_modem.get_simple_player(&pid).await{
+            let res = self.game.get_full_game_info(&player);
+            if res.is_ok(){
+                return Ok(res.unwrap());
+            }
+        }
+        return Err(NotAllowedError::new("Not allowed"));
     }
 
     pub async fn handle_tile_select_msg(&mut self, ws_id: &str, tile_num: u8) {
