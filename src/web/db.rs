@@ -1,11 +1,14 @@
-use crate::web::errors::DuplicateLobbyError;
-
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use anyhow::{bail, Result};
 use tokio::sync::RwLock;
+use redis::aio::ConnectionManager;
+use redis::RedisError;
 
 use super::lobby::Lobby;
-use anyhow::{bail, Result};
+use crate::web::errors::DuplicateLobbyError;
+
 
 #[derive(Clone)]
 pub struct RedisGameDB {}
@@ -86,10 +89,48 @@ impl InMemSessionStore{
         None
     }
 
-    pub async fn insert(&self, key: String, val: String) {
+    pub async fn insert(&self, key: String, val: String) -> Result<()> {
         let mut writer = self.db.write().await;
         (*writer).insert(key, val);
+        Ok(())
     }
 }
 
+#[derive(Clone)]
+pub struct RedisSessionStore{
+    conn: ConnectionManager,
+}
 
+impl RedisSessionStore{
+    pub async fn new(addr: &str) -> Result<Self, RedisError> {
+        let client = redis::Client::open(addr)?;
+        Ok(RedisSessionStore{
+            conn: ConnectionManager::new(client).await?
+        })
+    }
+
+    pub async fn get(&mut self, key: &str) -> Option<String> {
+        let resp = redis::cmd("GET").arg(key).query_async(&mut self.conn).await;
+        match resp{
+            Ok(item) => {
+                item
+            },
+            Err(e) => {
+                eprintln!("Error fetching from redis: {:?}", e);
+                None
+            }
+        }
+    }
+
+    pub async fn insert(&mut self, key: String, val: String) -> Result<()> {
+        let resp: Result<(), RedisError> = redis::cmd("SET").arg(key).arg(val).query_async(&mut self.conn).await;
+        match resp{
+            Ok(_) => Ok(()),
+            Err(e) => {
+                eprintln!("Error inserting to redis: {:?}", e);
+                let msg = format!("Error: {:?}", e);
+                bail!(msg)
+            },
+        }
+    }
+}
