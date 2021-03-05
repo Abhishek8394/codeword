@@ -60,9 +60,9 @@ pub struct SpyMasterBoardView {
 }
 
 #[derive(Serialize)]
-pub enum BoardView{
-    PlayerView (PlayerBoardView),
-    SpyMasterView (SpyMasterBoardView),
+pub enum BoardView {
+    PlayerView(PlayerBoardView),
+    SpyMasterView(SpyMasterBoardView),
 }
 
 pub trait PlayerView {

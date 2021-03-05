@@ -83,10 +83,10 @@ pub mod filters {
 
 pub mod handlers {
 
-    use crate::web::db::InMemSessionStore;
     use crate::players::{Player, SimplePlayer};
     use crate::web::cookies::gen_auth_cookie;
     use crate::web::db::InMemGameDB;
+    use crate::web::db::InMemSessionStore;
     use crate::web::lobby::GameWrapper;
     use crate::web::lobby::Lobby;
     use crate::web::responses::CreatePlayerResp;
@@ -101,7 +101,10 @@ pub mod handlers {
         return Uuid::new_v4().to_string();
     }
 
-    pub async fn create_lobby(db: InMemGameDB, _sess: InMemSessionStore) -> Result<impl warp::Reply, warp::Rejection> {
+    pub async fn create_lobby(
+        db: InMemGameDB,
+        _sess: InMemSessionStore,
+    ) -> Result<impl warp::Reply, warp::Rejection> {
         let words: Vec<String> = (0..25).map(|x| format!("word-{}", x)).collect();
         // let game = GameWrapper::new(&words).unwrap();
         let game = match GameWrapper::new(&words) {
@@ -139,7 +142,7 @@ pub mod handlers {
         lobby_id: String,
         mut player: SimplePlayer,
         db: InMemGameDB,
-        sess: InMemSessionStore
+        sess: InMemSessionStore,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         let lobby_res = db.get_lobby(&lobby_id).await;
         if lobby_res.is_err() {
@@ -159,10 +162,16 @@ pub mod handlers {
         });
         let sess_id = format!("{}_{}", pid, Uuid::new_v4().to_string());
         // ignore insertion errors
-        if let Err(e) = sess.insert(&sess_id, "pid".to_string(), format!("{}", pid)).await{
+        if let Err(e) = sess
+            .insert(&sess_id, "pid".to_string(), format!("{}", pid))
+            .await
+        {
             eprintln!("Error inserting in session: {:?}", e);
         };
-        if let Err(e) = sess.insert(&sess_id, "lobby_id".to_string(), lobby_id.clone()).await{
+        if let Err(e) = sess
+            .insert(&sess_id, "lobby_id".to_string(), lobby_id.clone())
+            .await
+        {
             eprintln!("Error inserting in session: {:?}", e);
         };
         let lobby_path = format!("/lobby/{}", lobby_id);
@@ -179,7 +188,7 @@ pub mod handlers {
         lobby_id: String,
         ws: warp::ws::Ws,
         db: InMemGameDB,
-        _sess: InMemSessionStore
+        _sess: InMemSessionStore,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         let lobby_res = db.get_lobby(&lobby_id).await;
         if lobby_res.is_err() {
@@ -198,10 +207,10 @@ pub mod handlers {
         lobby_id: String,
         sess_id: String,
         db: InMemGameDB,
-        sess: InMemSessionStore
+        sess: InMemSessionStore,
     ) -> Result<impl warp::Reply, warp::Rejection> {
         // Get player from session
-        let pid = match sess.get(&sess_id, "pid").await{
+        let pid = match sess.get(&sess_id, "pid").await {
             Some(p) => p,
             None => {
                 return Err(warp::reject::not_found());
@@ -216,16 +225,16 @@ pub mod handlers {
         let reader = lobby.read().await;
         // Get and serialize view
         let view = (*reader).get_player_full_game_view(&pid).await;
-        match view{
+        match view {
             Ok(view) => {
-                return match serde_json::to_string(&view){
+                return match serde_json::to_string(&view) {
                     Ok(ser_view) => Ok(ser_view),
                     Err(err) => {
                         eprintln!("Error serializing view: {:?}", err);
                         Err(warp::reject::not_found())
                     }
                 };
-            },
+            }
             Err(err) => {
                 eprintln!("Error creating view: {:?}", err);
                 return Err(warp::reject::not_found());
@@ -272,8 +281,8 @@ pub mod handlers {
 #[cfg(test)]
 mod tests {
 
-    use crate::web::db::{InMemGameDB, InMemSessionStore};
     use super::filters::*;
+    use crate::web::db::{InMemGameDB, InMemSessionStore};
 
     #[tokio::test]
     async fn test_ws_conn() {

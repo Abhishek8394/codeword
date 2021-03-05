@@ -1,9 +1,8 @@
 // use serde::{Serialize, Deserialize};
-use crate::game::FullGameInfoViewResult;
-use crate::web::errors::NotAllowedError;
-use crate::game::FullGameInfoView;
 use super::players::WebAppPlayer;
 use crate::errors::InvalidError;
+use crate::game::FullGameInfoView;
+use crate::game::FullGameInfoViewResult;
 use crate::game::InProgressGame;
 use crate::game::InitialGame;
 use crate::game::{Game, MoveResult};
@@ -11,16 +10,17 @@ use crate::players::Player;
 use crate::players::PlayerId;
 use crate::players::SimplePlayer;
 use crate::web::auth::{build_echo_challenge, AuthChallenge, InternalAuthChallenge};
+use crate::web::errors::NotAllowedError;
 use crate::web::players::PlayerModem;
 use crate::web::ws::PlayerWebSocketConnection;
 use crate::web::ws::PlayerWebSocketMsg;
 use crate::web::wsproto::{AuthResponse, WSMessage};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use serde::Serialize;
 
 #[derive(Serialize)]
 pub enum GameViewWrapper {
@@ -62,13 +62,16 @@ impl GameWrapper {
         }
     }
 
-    pub fn get_full_game_info(&self, player: &SimplePlayer) -> Result<GameViewWrapper, InvalidError>{
+    pub fn get_full_game_info(
+        &self,
+        player: &SimplePlayer,
+    ) -> Result<GameViewWrapper, InvalidError> {
         match &self {
-            &GameWrapper::InitialGame(g) => match g.get_initial_full_game_info(&player){
+            &GameWrapper::InitialGame(g) => match g.get_initial_full_game_info(&player) {
                 Ok(g) => Ok(GameViewWrapper::InitialFullGameView(g)),
                 Err(e) => Err(e),
             },
-            &GameWrapper::InProgressGame(g) => match g.get_in_progress_full_game_info(&player){
+            &GameWrapper::InProgressGame(g) => match g.get_in_progress_full_game_info(&player) {
                 Ok(g) => Ok(GameViewWrapper::InProgressFullGameView(g)),
                 Err(e) => Err(e),
             },
@@ -209,10 +212,13 @@ impl Lobby {
     }
 
     /// Get game view based on player id.0
-    pub async fn get_player_full_game_view(&self, pid: &str) -> Result<GameViewWrapper, NotAllowedError> {
-        if let Some(player) = self.player_modem.get_simple_player(&pid).await{
+    pub async fn get_player_full_game_view(
+        &self,
+        pid: &str,
+    ) -> Result<GameViewWrapper, NotAllowedError> {
+        if let Some(player) = self.player_modem.get_simple_player(&pid).await {
             let res = self.game.get_full_game_info(&player);
-            if res.is_ok(){
+            if res.is_ok() {
                 return Ok(res.unwrap());
             }
         }
