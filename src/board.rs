@@ -2,6 +2,7 @@ use crate::errors::{InvalidError, InvalidMoveError};
 
 use rand::prelude::*;
 use rand::thread_rng;
+use serde::Serialize;
 
 fn bitmap_for_pos(pos_list: &[usize]) -> Result<u32, InvalidError> {
     let mut bm: u32 = 0;
@@ -41,6 +42,7 @@ fn is_bit_set(num: &u32, idx: usize) -> bool {
     num & m == m
 }
 
+#[derive(Serialize)]
 pub struct PlayerBoardView {
     visible_team_one_indices: u32,
     visible_team_two_indices: u32,
@@ -48,6 +50,7 @@ pub struct PlayerBoardView {
     visible_danger_index: Option<u8>,
 }
 
+#[derive(Serialize)]
 pub struct SpyMasterBoardView {
     danger_index: u8,
     grey_indices: u32,
@@ -56,6 +59,7 @@ pub struct SpyMasterBoardView {
     unraveled_indices: u32,
 }
 
+#[derive(Serialize)]
 pub enum BoardView{
     PlayerView (PlayerBoardView),
     SpyMasterView (SpyMasterBoardView),

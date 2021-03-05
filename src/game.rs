@@ -1,3 +1,4 @@
+use serde::Serialize;
 use crate::players::PlayerId;
 use crate::board::{Board, BoardView, PlayerView};
 use crate::errors::{InvalidError, InvalidMoveError};
@@ -8,7 +9,7 @@ use std::fmt::Display;
 
 static TARGET_SCORE: u8 = 0;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum Team {
     TeamOne,
     TeamTwo,
@@ -47,6 +48,7 @@ pub enum MoveResult {
 
 /// Compact struct to contain dynamically changing data. Just the bits that change every turn.
 /// `Board` is not included because it varies based on player.
+#[derive(Serialize)]
 pub struct DynamicGameInfoView {
     team_one_score: u8,
     team_two_score: u8,
@@ -55,6 +57,7 @@ pub struct DynamicGameInfoView {
 
 /// Relatively less frequently changing data.
 /// `Board` is not included because it varies based on player.
+#[derive(Serialize)]
 pub struct GameInfoView<S> {
     team_one_players: Vec<String>,
     team_two_players: Vec<String>,
@@ -64,6 +67,7 @@ pub struct GameInfoView<S> {
     stats: DynamicGameInfoView,
 }
 
+#[derive(Serialize)]
 pub struct FullGameInfoView<S> {
     game_info: GameInfoView<S>,
     board: BoardView,
@@ -84,10 +88,10 @@ pub struct Game<S, P: Player> {
     state: S,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct InitialGame {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct InProgressGame {}
 
 impl<S: Clone, P: Player> Game<S, P> {

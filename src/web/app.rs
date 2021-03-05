@@ -200,14 +200,37 @@ pub mod handlers {
         db: InMemGameDB,
         sess: InMemSessionStore
     ) -> Result<impl warp::Reply, warp::Rejection> {
+        // Get player from session
+        let pid = match sess.get(&sess_id, "pid").await{
+            Some(p) => p,
+            None => {
+                return Err(warp::reject::not_found());
+            }
+        };
+        // Get lobby
         let lobby_res = db.get_lobby(&lobby_id).await;
         if lobby_res.is_err() {
             return Err(warp::reject::not_found());
         }
-
         let lobby = lobby_res.unwrap();
-        // let view = get_player_full_game_view(&pid);
-        return Ok(String::from("TODO"));
+        let reader = lobby.read().await;
+        // Get and serialize view
+        let view = (*reader).get_player_full_game_view(&pid).await;
+        match view{
+            Ok(view) => {
+                return match serde_json::to_string(&view){
+                    Ok(ser_view) => Ok(ser_view),
+                    Err(err) => {
+                        eprintln!("Error serializing view: {:?}", err);
+                        Err(warp::reject::not_found())
+                    }
+                };
+            },
+            Err(err) => {
+                eprintln!("Error creating view: {:?}", err);
+                return Err(warp::reject::not_found());
+            }
+        };
     }
 
     pub fn add_player_to_team() {

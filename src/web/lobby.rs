@@ -20,8 +20,9 @@ use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use serde::Serialize;
 
-// #[derive(Clone)]
+#[derive(Serialize)]
 pub enum GameViewWrapper {
     InitialFullGameView(FullGameInfoView<InitialGame>),
     InProgressFullGameView(FullGameInfoView<InProgressGame>),
