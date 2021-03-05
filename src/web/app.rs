@@ -158,7 +158,13 @@ pub mod handlers {
             challenge: auth_challenge,
         });
         let sess_id = format!("{}_{}", pid, Uuid::new_v4().to_string());
-        sess.insert(sess_id.clone(), format!("{}", pid)).await;
+        // ignore insertion errors
+        if let Err(e) = sess.insert(&sess_id, "pid".to_string(), format!("{}", pid)).await{
+            eprintln!("Error inserting in session: {:?}", e);
+        };
+        if let Err(e) = sess.insert(&sess_id, "lobby_id".to_string(), lobby_id.clone()).await{
+            eprintln!("Error inserting in session: {:?}", e);
+        };
         let lobby_path = format!("/lobby/{}", lobby_id);
         return Ok(
             warp::reply::with_header(

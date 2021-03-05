@@ -68,10 +68,11 @@ impl InMemGameDB {
 }
 
 
+
 /// This is only for testing. A simple hashmap based util. Use with redis or something in prod.
 #[derive(Clone)]
 pub struct InMemSessionStore{
-    db: Arc<RwLock<HashMap<String, String>>>,
+    db: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
 }
 
 impl InMemSessionStore{
@@ -81,17 +82,25 @@ impl InMemSessionStore{
         }
     }
 
-    pub async fn get(&self, key: &str) -> Option<String>{
+    fn gen_internal_key(&self, sess_id: &str) -> String{
+        format!("cookies_{}", sess_id)
+    }
+
+    pub async fn get(&self, sess_id: &str, key: &str) -> Option<String>{
         let reader = self.db.read().await;
-        if let Some(val) = (*reader).get(key){
-            return Some(val.clone());
+        if let Some(cookie_data) = (*reader).get(&self.gen_internal_key(sess_id)){
+            if let Some(val) = cookie_data.get(key){
+                return Some(val.clone())
+            };
         }
         None
     }
 
-    pub async fn insert(&self, key: String, val: String) -> Result<()> {
+    pub async fn insert(&self, sess_id: &str, key: String, val: String) -> Result<()> {
         let mut writer = self.db.write().await;
-        (*writer).insert(key, val);
+        let cookie_data = (*writer).entry(self.gen_internal_key(sess_id))
+            .or_insert(HashMap::new());
+        cookie_data.insert(key, val);
         Ok(())
     }
 }
@@ -109,8 +118,13 @@ impl RedisSessionStore{
         })
     }
 
-    pub async fn get(&mut self, key: &str) -> Option<String> {
-        let resp = redis::cmd("GET").arg(key).query_async(&mut self.conn).await;
+    fn gen_internal_key(&self, sess_id: &str) -> String{
+        format!("cookies_{}", sess_id)
+    }
+
+    pub async fn get(&mut self, sess_id: &str, key: &str) -> Option<String> {
+        let internal_key = self.gen_internal_key(sess_id);
+        let resp = redis::cmd("HGET").arg(internal_key).arg(key).query_async(&mut self.conn).await;
         match resp{
             Ok(item) => {
                 item
@@ -122,8 +136,11 @@ impl RedisSessionStore{
         }
     }
 
-    pub async fn insert(&mut self, key: String, val: String) -> Result<()> {
-        let resp: Result<(), RedisError> = redis::cmd("SET").arg(key).arg(val).query_async(&mut self.conn).await;
+    pub async fn insert(&mut self, sess_id: &str, key: String, val: String) -> Result<()> {
+        let internal_key = self.gen_internal_key(sess_id);
+        let resp: Result<(), RedisError> = redis::cmd("HSET")
+            .arg(internal_key)
+            .arg(key).arg(val).query_async(&mut self.conn).await;
         match resp{
             Ok(_) => Ok(()),
             Err(e) => {
