@@ -178,13 +178,11 @@ impl<S: Clone, P: Player> Game<S, P> {
 
     pub fn get_full_game_info(&self, player: &P) -> Result<FullGameInfoView<S>, InvalidError> {
         let pid = player.get_id();
-        if !self.has_player(&pid) {
-            return Err(InvalidError::new("Invalid player"));
-        }
-        let mut board_view: BoardView;
+        let board_view: BoardView;
         if self.is_team_one_spymaster(&pid) || self.is_team_two_spymaster(&pid) {
             board_view = BoardView::SpyMasterView(self.board.get_spymaster_view());
         } else {
+            // allow players not in any team too.
             board_view = BoardView::PlayerView(self.board.get_regular_player_view());
         }
         let game_info = self.get_game_info();

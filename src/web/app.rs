@@ -213,6 +213,7 @@ pub mod handlers {
         let pid = match sess.get(&sess_id, "pid").await {
             Some(p) => p,
             None => {
+                eprintln!("no sess found");
                 return Err(warp::reject::not_found());
             }
         };
