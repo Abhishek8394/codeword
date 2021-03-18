@@ -1,3 +1,4 @@
+use crate::errors::GameBeginError;
 use crate::board::{Board, MinimalBoardView, FullBoardView, PlayerView};
 use crate::errors::{InvalidError, InvalidMoveError};
 use crate::players::Player;
@@ -41,8 +42,23 @@ impl Display for WinReason {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
+pub struct WinResult{
+    pub team: Team,
+    pub reason: WinReason,
+}
+
+impl WinResult{
+    pub fn new(team: Team, reason: WinReason) -> Self{
+        Self{
+            team, reason
+        }
+    }
+}
+
+
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum MoveResult {
-    Win(Team, WinReason),
+    Win(WinResult),
     Continue,
 }
 
@@ -54,7 +70,6 @@ pub struct DynamicGameInfoView {
     team_one_score: u8,
     team_two_score: u8,
     next_turn: Option<Team>,
-    result: MoveResult,
 }
 
 /// Relatively less frequently changing data.
@@ -101,6 +116,7 @@ pub struct InitialGame {}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct InProgressGame {}
+
 
 impl<S: Clone, P: Player> Game<S, P> {
     pub fn get_team_one_score(&self) -> u8 {
@@ -186,12 +202,12 @@ impl<S: Clone, P: Player> Game<S, P> {
 
     pub fn get_full_game_info(&self, player: &P) -> Result<FullGameInfoView<S>, InvalidError> {
         let pid = player.get_id();
-        let board_view: BoardView;
+        let board_view: FullBoardView;
         if self.is_team_one_spymaster(&pid) || self.is_team_two_spymaster(&pid) {
-            board_view = BoardView::FullSpyMasterView(self.board.get_full_spymaster_view());
+            board_view = FullBoardView::FullSpyMasterView(self.board.get_full_spymaster_view());
         } else {
             // allow players not in any team too.
-            board_view = BoardView::FullPlayerView(self.board.get_full_regular_player_view());
+            board_view = FullBoardView::FullPlayerView(self.board.get_full_regular_player_view());
         }
         let game_info = self.get_game_info();
         return Ok(FullGameInfoView {
@@ -209,7 +225,7 @@ impl<S: Clone, P: Player> Game<S, P> {
     }
 }
 
-impl<P: Player> Game<InitialGame, P> {
+impl<P: Player + Clone> Game<InitialGame, P> {
     pub fn new(vocab: &Vec<String>) -> Result<Self, InvalidError> {
         let board = Board::new(vocab)?;
         let mut game = Game {
@@ -232,14 +248,15 @@ impl<P: Player> Game<InitialGame, P> {
         self.has_enough_players()
     }
 
-    pub fn begin(self) -> Result<Game<InProgressGame, P>, InvalidError> {
+    pub fn begin(self) -> Result<Game<InProgressGame, P>, GameBeginError<Self>> {
         if self.can_begin() {
             // return (None, Ok(InProgressGame { game: self.game }));
             let mut game = Game::<InProgressGame, P>::from(self);
             game.next_turn = Some(Team::TeamOne);
             return Ok(game);
         }
-        return Err(InvalidError::new(
+        return Err(GameBeginError::new(
+            self,
             "Not enough players. Each team needs 2 players atleast and a chosen spymaster.",
         ));
     }
@@ -289,7 +306,7 @@ impl<P: Player> Game<InProgressGame, P> {
                         } else {
                             Team::TeamOne
                         };
-                        move_result = MoveResult::Win(win_team, WinReason::OpponentDangerDraw);
+                        move_result = MoveResult::Win(WinResult::new(win_team, WinReason::OpponentDangerDraw));
                     } else if self.board.is_grey_index(tile_id.into()) {
                         // handle grey tile
                         if team_num == Team::TeamOne {
@@ -326,11 +343,11 @@ impl<P: Player> Game<InProgressGame, P> {
             self.team_two_score = self.board.get_team_two_pending_size().try_into().unwrap();
 
             if self.team_one_score == TARGET_SCORE {
-                move_result = MoveResult::Win(Team::TeamOne, WinReason::ScoreReached);
+                move_result = MoveResult::Win(WinResult::new(Team::TeamOne, WinReason::ScoreReached));
             }
 
             if self.team_two_score == TARGET_SCORE {
-                move_result = MoveResult::Win(Team::TeamTwo, WinReason::ScoreReached);
+                move_result = MoveResult::Win(WinResult::new(Team::TeamTwo, WinReason::ScoreReached));
             }
             return Ok(move_result);
         }
@@ -371,7 +388,7 @@ mod tests {
     #[test]
     fn game_move_team_tracking() -> Result<(), InvalidError> {
         let game = setup_valid_game()?;
-        let mut game = game.begin()?;
+        let mut game = game.begin().map_err(|e| {InvalidError::new(&format!("{:?}", e))})?;
         assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
         // maybe player changed their name.
         let p1 = SimplePlayer::new("p-whatever", 1);
@@ -389,7 +406,7 @@ mod tests {
     #[test]
     fn game_move_danger_open() -> Result<(), InvalidError> {
         let game = setup_valid_game()?;
-        let mut game = game.begin()?;
+        let mut game = game.begin().map_err(|e| {InvalidError::new(&format!("{:?}", e))})?;
         assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
         // maybe player changed their name.
         let p1 = SimplePlayer::new("p-whatever", 1);
@@ -398,7 +415,7 @@ mod tests {
         assert!(res.is_ok());
         assert_eq!(
             res.unwrap(),
-            MoveResult::Win(Team::TeamTwo, WinReason::OpponentDangerDraw)
+            MoveResult::Win(WinResult::new(Team::TeamTwo, WinReason::OpponentDangerDraw))
         );
         Ok(())
     }
@@ -406,7 +423,7 @@ mod tests {
     #[test]
     fn game_move_grey_open() -> Result<(), InvalidError> {
         let game = setup_valid_game()?;
-        let mut game = game.begin()?;
+        let mut game = game.begin().map_err(|e| {InvalidError::new(&format!("{:?}", e))})?;
         assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
         // maybe player changed their name.
         let p1 = SimplePlayer::new("p-whatever", 1);
@@ -423,7 +440,7 @@ mod tests {
     #[test]
     fn game_move_correct_incorrect_open() -> Result<(), InvalidError> {
         let game = setup_valid_game()?;
-        let mut game = game.begin()?;
+        let mut game = game.begin().map_err(|e| {InvalidError::new(&format!("{:?}", e))})?;
         assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
         // maybe player changed their name.
         let p1 = SimplePlayer::new("p-whatever", 1);
@@ -456,7 +473,7 @@ mod tests {
     #[test]
     fn game_winning() -> Result<(), InvalidError> {
         let game = setup_valid_game()?;
-        let mut game = game.begin()?;
+        let mut game = game.begin().map_err(|e| {InvalidError::new(&format!("{:?}", e))})?;
         assert_eq!(*(game.next_turn.as_ref().unwrap()), Team::TeamOne);
         // maybe player changed their name.
         let p1 = SimplePlayer::new("p-whatever", 1);
@@ -476,7 +493,7 @@ mod tests {
         assert_eq!(0, game.get_team_one_score());
         assert_eq!(
             res.unwrap(),
-            MoveResult::Win(Team::TeamOne, WinReason::ScoreReached)
+            MoveResult::Win(WinResult::new(Team::TeamOne, WinReason::ScoreReached))
         );
         Ok(())
     }
