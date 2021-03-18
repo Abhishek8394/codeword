@@ -36,6 +36,10 @@ impl<T: Clone> GameBeginError<T>{
             msg: msg.to_string()
         }
     }
+
+    pub fn take_old(self) -> T{
+        self.old
+    }
 }
 
 impl<T: Clone> fmt::Display for GameBeginError<T> {

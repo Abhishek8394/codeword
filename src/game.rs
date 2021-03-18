@@ -1,3 +1,4 @@
+use serde::Serializer;
 use crate::errors::GameBeginError;
 use crate::board::{Board, MinimalBoardView, FullBoardView, PlayerView};
 use crate::errors::{InvalidError, InvalidMoveError};
@@ -70,6 +71,7 @@ pub struct DynamicGameInfoView {
     team_one_score: u8,
     team_two_score: u8,
     next_turn: Option<Team>,
+    win: Option<WinResult>,
 }
 
 /// Relatively less frequently changing data.
@@ -111,12 +113,30 @@ pub struct Game<S, P: Player> {
     state: S,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct InitialGame {}
 
-#[derive(Debug, Clone, Serialize)]
+impl Serialize for InitialGame{
+
+    fn serialize<S>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> where S: Serializer { 
+        ser.serialize_str("InitialGame")
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct InProgressGame {}
 
+impl Serialize for InProgressGame{
+
+    fn serialize<S>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> where S: Serializer { 
+        ser.serialize_str("InProgressGame")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FinishedGame {
+    win: WinResult,
+}
 
 impl<S: Clone, P: Player> Game<S, P> {
     pub fn get_team_one_score(&self) -> u8 {
@@ -221,6 +241,7 @@ impl<S: Clone, P: Player> Game<S, P> {
             team_one_score: self.team_one_score,
             team_two_score: self.team_two_score,
             next_turn: self.next_turn.clone(),
+            win: None,
         }
     }
 }
@@ -286,6 +307,7 @@ impl<P: Player> From<Game<InitialGame, P>> for Game<InProgressGame, P> {
 }
 
 impl<P: Player> Game<InProgressGame, P> {
+    // TODO: Also transition to finished state if applicable.
     pub fn try_unravel(&mut self, player: &P, tile_id: u8) -> Result<MoveResult, InvalidMoveError> {
         let team_num = match self.get_player_team(player) {
             Some(team) => team,

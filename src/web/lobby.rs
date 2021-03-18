@@ -52,10 +52,13 @@ impl GameWrapper {
         match self {
             Self::InitialGame(game) => {
                 let tmp = game.clone();
-                if let Ok(game) = tmp.begin() {
-                    Self::InProgressGame(game)
-                } else {
-                    self.clone()
+                match tmp.begin(){
+                    Ok(game) => {
+                        Self::InProgressGame(game)
+                    },
+                    Err(e) => {
+                        Self::InitialGame(e.take_old())
+                    }
                 }
             }
             g => g.clone(),
