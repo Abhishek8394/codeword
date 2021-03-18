@@ -1,4 +1,4 @@
-use crate::board::{Board, BoardView, PlayerView};
+use crate::board::{Board, MinimalBoardView, FullBoardView, PlayerView};
 use crate::errors::{InvalidError, InvalidMoveError};
 use crate::players::Player;
 use crate::players::PlayerId;
@@ -24,7 +24,7 @@ impl Team {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum WinReason {
     ScoreReached,
     OpponentDangerDraw,
@@ -40,7 +40,7 @@ impl Display for WinReason {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize)]
 pub enum MoveResult {
     Win(Team, WinReason),
     Continue,
@@ -48,11 +48,13 @@ pub enum MoveResult {
 
 /// Compact struct to contain dynamically changing data. Just the bits that change every turn.
 /// `Board` is not included because it varies based on player.
+/// TODO: Win/lose info.
 #[derive(Serialize)]
 pub struct DynamicGameInfoView {
     team_one_score: u8,
     team_two_score: u8,
     next_turn: Option<Team>,
+    result: MoveResult,
 }
 
 /// Relatively less frequently changing data.
@@ -68,9 +70,15 @@ pub struct GameInfoView<S> {
 }
 
 #[derive(Serialize)]
+pub struct MinimalGameInfoView<S> {
+    game_info: GameInfoView<S>,
+    board: MinimalBoardView,
+}
+
+#[derive(Serialize)]
 pub struct FullGameInfoView<S> {
     game_info: GameInfoView<S>,
-    board: BoardView,
+    board: FullBoardView,
 }
 
 pub type FullGameInfoViewResult<S> = Result<FullGameInfoView<S>, InvalidError>;
@@ -180,10 +188,10 @@ impl<S: Clone, P: Player> Game<S, P> {
         let pid = player.get_id();
         let board_view: BoardView;
         if self.is_team_one_spymaster(&pid) || self.is_team_two_spymaster(&pid) {
-            board_view = BoardView::SpyMasterView(self.board.get_spymaster_view());
+            board_view = BoardView::FullSpyMasterView(self.board.get_full_spymaster_view());
         } else {
             // allow players not in any team too.
-            board_view = BoardView::PlayerView(self.board.get_regular_player_view());
+            board_view = BoardView::FullPlayerView(self.board.get_full_regular_player_view());
         }
         let game_info = self.get_game_info();
         return Ok(FullGameInfoView {
