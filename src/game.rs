@@ -101,6 +101,21 @@ pub struct FullGameInfoView<S> {
 pub type FullGameInfoViewResult<S> = Result<FullGameInfoView<S>, InvalidError>;
 
 #[derive(Debug, Clone)]
+pub struct UnravelAction{
+    player_id: PlayerId,
+    tile_id: u8,
+}
+
+impl UnravelAction{
+    pub fn new(player_id: &PlayerId, tile_id: u8) -> Self {
+        UnravelAction{
+            player_id: player_id.clone(),
+            tile_id
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Game<S, P: Player> {
     board: Board,
     team_one_players: HashMap<u32, P>,
@@ -110,6 +125,7 @@ pub struct Game<S, P: Player> {
     team_one_score: u8,
     team_two_score: u8,
     next_turn: Option<Team>,
+    action_list: Vec<UnravelAction>,
     state: S,
 }
 
@@ -181,6 +197,16 @@ impl<S: Clone, P: Player> Game<S, P> {
         if self.team_one_players.contains_key(player.get_id()) {
             Some(Team::TeamOne)
         } else if self.team_two_players.contains_key(player.get_id()) {
+            Some(Team::TeamTwo)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_player_team_from_id(&self, player_id: &PlayerId) -> Option<Team> {
+        if self.team_one_players.contains_key(player_id) {
+            Some(Team::TeamOne)
+        } else if self.team_two_players.contains_key(player_id) {
             Some(Team::TeamTwo)
         } else {
             None
@@ -259,6 +285,7 @@ impl<P: Player + Clone> Game<InitialGame, P> {
             team_two_score: 0,
             next_turn: None,
             state: InitialGame {},
+            action_list: Vec::new(),
         };
         game.team_one_score = game.board.get_team_one_pending_size().try_into().unwrap();
         game.team_two_score = game.board.get_team_two_pending_size().try_into().unwrap();
@@ -302,25 +329,31 @@ impl<P: Player> From<Game<InitialGame, P>> for Game<InProgressGame, P> {
             team_one_score: value.team_one_score,
             team_two_score: value.team_two_score,
             next_turn: value.next_turn,
+            action_list: Vec::new(),
         }
     }
 }
 
 impl<P: Player> Game<InProgressGame, P> {
-    // TODO: Also transition to finished state if applicable.
-    pub fn try_unravel(&mut self, player: &P, tile_id: u8) -> Result<MoveResult, InvalidMoveError> {
-        let team_num = match self.get_player_team(player) {
+
+    /// Act on a given action object.
+    pub fn try_unravel_action(&mut self, action: &UnravelAction) -> Result<MoveResult, InvalidMoveError> {
+        let team_num = match self.get_player_team_from_id(&action.player_id) {
             Some(team) => team,
             None => {
                 return Err(InvalidMoveError::new("Player not in the team"));
             }
         };
-
         let mut move_result: MoveResult = MoveResult::Continue;
+        let tile_id = action.tile_id.clone();
 
         if team_num == *self.next_turn.as_ref().unwrap() {
             match self.board.unravel_word(tile_id as usize) {
                 Ok(_) => {
+                    // If move was accepted, Add it to list of actions performed so far.
+                    self.action_list.push(action.clone());
+
+                    // Handle move results.
                     if tile_id == self.board.danger_index() {
                         // handle Game Over.
                         let win_team = if team_num == Team::TeamOne {
@@ -374,6 +407,12 @@ impl<P: Player> Game<InProgressGame, P> {
             return Ok(move_result);
         }
         return Err(InvalidMoveError::new("Not the current team's turn"));
+    }
+
+    // TODO: Also transition to finished state if applicable.
+    pub fn try_unravel(&mut self, player: &P, tile_id: u8) -> Result<MoveResult, InvalidMoveError> {
+        let unravel_action = UnravelAction::new(player.get_id(), tile_id);
+        return self.try_unravel_action(&unravel_action);
     }
 
     pub fn get_in_progress_full_game_info(
