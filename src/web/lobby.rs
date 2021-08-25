@@ -2,10 +2,10 @@
 use super::players::WebAppPlayer;
 use crate::errors::InvalidError;
 use crate::game::FullGameInfoView;
-use crate::game::FullGameInfoViewResult;
+
 use crate::game::InProgressGame;
 use crate::game::InitialGame;
-use crate::game::{Game, MoveResult};
+use crate::game::{Game, MoveResult, WinResult};
 use crate::players::Player;
 use crate::players::PlayerId;
 use crate::players::SimplePlayer;
@@ -52,10 +52,13 @@ impl GameWrapper {
         match self {
             Self::InitialGame(game) => {
                 let tmp = game.clone();
-                if let Ok(game) = tmp.begin() {
-                    Self::InProgressGame(game)
-                } else {
-                    self.clone()
+                match tmp.begin(){
+                    Ok(game) => {
+                        Self::InProgressGame(game)
+                    },
+                    Err(e) => {
+                        Self::InitialGame(e.take_old())
+                    }
                 }
             }
             g => g.clone(),
@@ -253,7 +256,7 @@ impl Lobby {
                                 self.move_update_id += 1;
                                 // Handle result states
                                 match move_result {
-                                    MoveResult::Win(ref team, ref reason) => {
+                                    MoveResult::Win(WinResult{ref team, ref reason}) => {
                                         let msg = WSMessage::TeamWinMessage {
                                             id: team.get_id(),
                                             reason: reason.to_string(),

@@ -29,6 +29,19 @@ pub struct GameBeginError<T: Clone>{
     msg: String,
 }
 
+impl<T: Clone> GameBeginError<T>{
+    pub fn new(old: T, msg: &str) -> Self{
+        GameBeginError{
+            old,
+            msg: msg.to_string()
+        }
+    }
+
+    pub fn take_old(self) -> T{
+        self.old
+    }
+}
+
 impl<T: Clone> fmt::Display for GameBeginError<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "failed to begin game because: {}", self.msg)
