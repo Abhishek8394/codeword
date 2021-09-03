@@ -2,6 +2,7 @@ use crate::errors::{InvalidError, InvalidMoveError};
 
 use rand::prelude::*;
 use rand::thread_rng;
+use serde::Serialize;
 
 fn bitmap_for_pos(pos_list: &[usize]) -> Result<u32, InvalidError> {
     let mut bm: u32 = 0;
@@ -41,14 +42,18 @@ fn is_bit_set(num: &u32, idx: usize) -> bool {
     num & m == m
 }
 
-pub struct DynamicPlayerViewBoard {
+// TODO: Add words in full info views
+
+#[derive(Serialize)]
+pub struct PlayerBoardView {
     visible_team_one_indices: u32,
     visible_team_two_indices: u32,
     visible_grey_indices: u32,
     visible_danger_index: Option<u8>,
 }
 
-pub struct DynamicSpyMasterViewBoard {
+#[derive(Serialize)]
+pub struct SpyMasterBoardView {
     danger_index: u8,
     grey_indices: u32,
     team_one_indices: u32,
@@ -56,11 +61,40 @@ pub struct DynamicSpyMasterViewBoard {
     unraveled_indices: u32,
 }
 
+#[derive(Serialize)]
+pub struct FullPlayerBoardView {
+    board: PlayerBoardView,
+    words: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct FullSpyMasterBoardView {
+    board: SpyMasterBoardView,
+    words: Vec<String>,
+}
+
+
+#[derive(Serialize)]
+pub enum MinimalBoardView {
+    PlayerView(PlayerBoardView),
+    SpyMasterView(SpyMasterBoardView),
+}
+
+#[derive(Serialize)]
+pub enum FullBoardView {
+    FullPlayerView(FullPlayerBoardView),
+    FullSpyMasterView(FullSpyMasterBoardView)
+}
+
 pub trait PlayerView {
-    /// Get a board view that a non-spymaster player is allowed to see.
-    fn get_team_player_view(&self) -> DynamicPlayerViewBoard;
-    /// Get a board view that a spymaster player is allowed to see.
-    fn get_spymaster_view(&self) -> DynamicSpyMasterViewBoard;
+    /// Get a minimal delta board view that a non-spymaster player is allowed to see.
+    fn get_regular_player_view(&self) -> PlayerBoardView;
+    /// Get a minimal delta board view that a spymaster player is allowed to see.
+    fn get_spymaster_view(&self) -> SpyMasterBoardView;
+    /// Get a complete board view that a non-spymaster player is allowed to see.
+    fn get_full_regular_player_view(&self) -> FullPlayerBoardView;
+    /// Get a complete board view that a spymaster player is allowed to see.
+    fn get_full_spymaster_view(&self) -> FullSpyMasterBoardView;
 }
 
 #[derive(Debug, Clone)]
@@ -71,33 +105,6 @@ pub struct Board {
     team_one_indices: u32,
     team_two_indices: u32,
     unraveled_indices: u32,
-}
-
-impl PlayerView for Board {
-    fn get_team_player_view(&self) -> DynamicPlayerViewBoard {
-        let visible_danger_index = if is_bit_set(&self.unraveled_indices, self.danger_index.into())
-        {
-            Some(self.danger_index)
-        } else {
-            None
-        };
-        return DynamicPlayerViewBoard {
-            visible_team_one_indices: self.team_one_indices & self.unraveled_indices,
-            visible_team_two_indices: self.team_two_indices & self.unraveled_indices,
-            visible_grey_indices: self.grey_indices & self.unraveled_indices,
-            visible_danger_index: visible_danger_index,
-        };
-    }
-
-    fn get_spymaster_view(&self) -> DynamicSpyMasterViewBoard {
-        DynamicSpyMasterViewBoard {
-            danger_index: self.danger_index,
-            grey_indices: self.grey_indices,
-            team_one_indices: self.team_one_indices,
-            team_two_indices: self.team_two_indices,
-            unraveled_indices: self.unraveled_indices,
-        }
-    }
 }
 
 impl Board {
@@ -185,6 +192,48 @@ impl Board {
 
     pub fn is_grey_index(&self, idx: usize) -> bool {
         is_bit_set(&self.grey_indices, idx)
+    }
+}
+
+/// View implementations
+impl PlayerView for Board {
+    fn get_regular_player_view(&self) -> PlayerBoardView {
+        let visible_danger_index = if is_bit_set(&self.unraveled_indices, self.danger_index.into())
+        {
+            Some(self.danger_index)
+        } else {
+            None
+        };
+        return PlayerBoardView {
+            visible_team_one_indices: self.team_one_indices & self.unraveled_indices,
+            visible_team_two_indices: self.team_two_indices & self.unraveled_indices,
+            visible_grey_indices: self.grey_indices & self.unraveled_indices,
+            visible_danger_index: visible_danger_index,
+        };
+    }
+
+    fn get_spymaster_view(&self) -> SpyMasterBoardView {
+        SpyMasterBoardView {
+            danger_index: self.danger_index,
+            grey_indices: self.grey_indices,
+            team_one_indices: self.team_one_indices,
+            team_two_indices: self.team_two_indices,
+            unraveled_indices: self.unraveled_indices,
+        }
+    }
+    
+    fn get_full_regular_player_view(&self) -> FullPlayerBoardView { 
+        FullPlayerBoardView{
+            board: self.get_regular_player_view(),
+            words: self.words.clone()
+        }
+    }
+
+    fn get_full_spymaster_view(&self) -> FullSpyMasterBoardView {
+        FullSpyMasterBoardView{
+            board: self.get_spymaster_view(),
+            words: self.words.clone()
+        }
     }
 }
 

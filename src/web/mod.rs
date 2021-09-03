@@ -9,5 +9,6 @@ pub mod responses;
 pub mod tasks;
 pub mod ws;
 pub mod wsproto;
+pub mod requests;
 
 pub use self::players::OnlinePlayer;

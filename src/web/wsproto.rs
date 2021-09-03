@@ -23,6 +23,8 @@ pub enum WSMessage {
     TeamWinMessage { id: u8, reason: String },
     /// Invalid move message
     InvalidMove { reason: Option<String> },
+    /// Player update message
+    PlayerUpdate,
 }
 
 impl From<Message> for WSMessage {

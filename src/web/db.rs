@@ -2,18 +2,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
-use tokio::sync::RwLock;
 use redis::aio::ConnectionManager;
 use redis::RedisError;
+use tokio::sync::RwLock;
 
 use super::lobby::Lobby;
 use crate::web::errors::DuplicateLobbyError;
 
-
 #[derive(Clone)]
 pub struct RedisGameDB {}
 
-type ArcLobbyWrapper = Arc<RwLock<Lobby>>;
+pub type ArcLobbyWrapper = Arc<RwLock<Lobby>>;
 
 #[derive(Clone)]
 pub struct InMemGameDB {
@@ -67,30 +66,28 @@ impl InMemGameDB {
     }
 }
 
-
-
 /// This is only for testing. A simple hashmap based util. Use with redis or something in prod.
 #[derive(Clone)]
-pub struct InMemSessionStore{
+pub struct InMemSessionStore {
     db: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
 }
 
-impl InMemSessionStore{
-    pub fn new() -> Self{
-        InMemSessionStore{
-            db: Arc::new(RwLock::new(HashMap::new()))
+impl InMemSessionStore {
+    pub fn new() -> Self {
+        InMemSessionStore {
+            db: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    fn gen_internal_key(&self, sess_id: &str) -> String{
+    fn gen_internal_key(&self, sess_id: &str) -> String {
         format!("cookies_{}", sess_id)
     }
 
-    pub async fn get(&self, sess_id: &str, key: &str) -> Option<String>{
+    pub async fn get(&self, sess_id: &str, key: &str) -> Option<String> {
         let reader = self.db.read().await;
-        if let Some(cookie_data) = (*reader).get(&self.gen_internal_key(sess_id)){
-            if let Some(val) = cookie_data.get(key){
-                return Some(val.clone())
+        if let Some(cookie_data) = (*reader).get(&self.gen_internal_key(sess_id)) {
+            if let Some(val) = cookie_data.get(key) {
+                return Some(val.clone());
             };
         }
         None
@@ -98,7 +95,8 @@ impl InMemSessionStore{
 
     pub async fn insert(&self, sess_id: &str, key: String, val: String) -> Result<()> {
         let mut writer = self.db.write().await;
-        let cookie_data = (*writer).entry(self.gen_internal_key(sess_id))
+        let cookie_data = (*writer)
+            .entry(self.gen_internal_key(sess_id))
             .or_insert(HashMap::new());
         cookie_data.insert(key, val);
         Ok(())
@@ -106,29 +104,31 @@ impl InMemSessionStore{
 }
 
 #[derive(Clone)]
-pub struct RedisSessionStore{
+pub struct RedisSessionStore {
     conn: ConnectionManager,
 }
 
-impl RedisSessionStore{
+impl RedisSessionStore {
     pub async fn new(addr: &str) -> Result<Self, RedisError> {
         let client = redis::Client::open(addr)?;
-        Ok(RedisSessionStore{
-            conn: ConnectionManager::new(client).await?
+        Ok(RedisSessionStore {
+            conn: ConnectionManager::new(client).await?,
         })
     }
 
-    fn gen_internal_key(&self, sess_id: &str) -> String{
+    fn gen_internal_key(&self, sess_id: &str) -> String {
         format!("cookies_{}", sess_id)
     }
 
     pub async fn get(&mut self, sess_id: &str, key: &str) -> Option<String> {
         let internal_key = self.gen_internal_key(sess_id);
-        let resp = redis::cmd("HGET").arg(internal_key).arg(key).query_async(&mut self.conn).await;
-        match resp{
-            Ok(item) => {
-                item
-            },
+        let resp = redis::cmd("HGET")
+            .arg(internal_key)
+            .arg(key)
+            .query_async(&mut self.conn)
+            .await;
+        match resp {
+            Ok(item) => item,
             Err(e) => {
                 eprintln!("Error fetching from redis: {:?}", e);
                 None
@@ -140,14 +140,17 @@ impl RedisSessionStore{
         let internal_key = self.gen_internal_key(sess_id);
         let resp: Result<(), RedisError> = redis::cmd("HSET")
             .arg(internal_key)
-            .arg(key).arg(val).query_async(&mut self.conn).await;
-        match resp{
+            .arg(key)
+            .arg(val)
+            .query_async(&mut self.conn)
+            .await;
+        match resp {
             Ok(_) => Ok(()),
             Err(e) => {
                 eprintln!("Error inserting to redis: {:?}", e);
                 let msg = format!("Error: {:?}", e);
                 bail!(msg)
-            },
+            }
         }
     }
 }

@@ -14,11 +14,14 @@ def send_connect_player_request(sess, addr, lobby_id, name):
     return resp
 
 def get_game_view(sess, addr, lobby_id):
-    url = f"http://{addr}/lobby/{lobby_id}/game_info"
+    url = f"http://{addr}/lobby/{lobby_id}/gameInfo"
     print(url)
     print(sess.cookies)
     resp = sess.get(url)
     return resp
+
+def pretty_json(obj):
+    return json.dumps(obj, indent=2, ensure_ascii=False, sort_keys=True)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -38,7 +41,7 @@ def main():
 
     # this should get resp cuz it has cookie
     p1_game_view = get_game_view(sess_1, addr, lobby_id)
-    print("p1:", p1_game_view.status_code, p1_game_view.text)
+    print("p1:", p1_game_view.status_code, pretty_json(p1_game_view.json()))
     sess_3 = requests.session()
     # this should get rekt
     p2_game_view = get_game_view(sess_3, addr, lobby_id)

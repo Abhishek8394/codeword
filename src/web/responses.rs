@@ -14,3 +14,11 @@ pub struct CreatePlayerResp {
     pub status: OpStatus,
     pub challenge: AuthChallenge,
 }
+
+/// Response for team change API.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamChangeResponse {
+    pub status: OpStatus,
+}
+
+impl warp::reject::Reject for TeamChangeResponse{}

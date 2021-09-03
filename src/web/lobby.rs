@@ -1,22 +1,34 @@
 // use serde::{Serialize, Deserialize};
 use super::players::WebAppPlayer;
+use crate::game::Team;
 use crate::errors::InvalidError;
+use crate::game::FullGameInfoView;
+
 use crate::game::InProgressGame;
 use crate::game::InitialGame;
-use crate::game::{Game, MoveResult};
+use crate::game::{Game, MoveResult, WinResult};
 use crate::players::Player;
 use crate::players::PlayerId;
 use crate::players::SimplePlayer;
 use crate::web::auth::{build_echo_challenge, AuthChallenge, InternalAuthChallenge};
+use crate::web::errors::NotAllowedError;
 use crate::web::players::PlayerModem;
 use crate::web::ws::PlayerWebSocketConnection;
 use crate::web::ws::PlayerWebSocketMsg;
 use crate::web::wsproto::{AuthResponse, WSMessage};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+#[derive(Serialize)]
+pub enum GameViewWrapper {
+    InitialFullGameView(FullGameInfoView<InitialGame>),
+    InProgressFullGameView(FullGameInfoView<InProgressGame>),
+    // InitialGameView(FullGameInfoView<InitialGame>),
+}
 
 #[derive(Clone)]
 pub enum GameWrapper {
@@ -41,13 +53,68 @@ impl GameWrapper {
         match self {
             Self::InitialGame(game) => {
                 let tmp = game.clone();
-                if let Ok(game) = tmp.begin() {
-                    Self::InProgressGame(game)
-                } else {
-                    self.clone()
+                match tmp.begin(){
+                    Ok(game) => {
+                        Self::InProgressGame(game)
+                    },
+                    Err(e) => {
+                        Self::InitialGame(e.take_old())
+                    }
                 }
             }
             g => g.clone(),
+        }
+    }
+
+    pub fn get_full_game_info(
+        &self,
+        player: &SimplePlayer,
+    ) -> Result<GameViewWrapper, InvalidError> {
+        match &self {
+            &GameWrapper::InitialGame(g) => match g.get_initial_full_game_info(&player) {
+                Ok(g) => Ok(GameViewWrapper::InitialFullGameView(g)),
+                Err(e) => Err(e),
+            },
+            &GameWrapper::InProgressGame(g) => match g.get_in_progress_full_game_info(&player) {
+                Ok(g) => Ok(GameViewWrapper::InProgressFullGameView(g)),
+                Err(e) => Err(e),
+            },
+        }
+    }
+
+    pub fn get_player_team_from_id(&self, pid: &PlayerId) -> Option<Team> {
+        match &self {
+            &GameWrapper::InitialGame(g) => g.get_player_team_from_id(pid),
+            &GameWrapper::InProgressGame(g) => g.get_player_team_from_id(pid),
+        }
+    }
+    
+    pub fn transfer_player(&self, pid: &PlayerId, team: &Team) -> (Self, Result<(), InvalidError>) {
+        let tmp = self.clone();
+        match tmp {
+            GameWrapper::InitialGame(mut g) => {
+                let res = g.transfer_player(pid, team);
+                return (GameWrapper::InitialGame(g), res);
+            },
+            GameWrapper::InProgressGame(mut g) => {
+                let res = g.transfer_player(pid, team);
+                
+                return (GameWrapper::InProgressGame(g), res);
+            },
+        }
+    }
+
+    pub fn add_player_to_team(&self, player: SimplePlayer, team: &Team) -> (Self, Result<(), InvalidError>) {
+        let tmp = self.clone();
+        match tmp {
+            GameWrapper::InitialGame(mut g) => {
+                let res = g.add_player_to_team(player, team);
+                return (GameWrapper::InitialGame(g), res);
+            },
+            GameWrapper::InProgressGame(mut g) => {
+                let res = g.add_player_to_team(player, team);
+                return (GameWrapper::InProgressGame(g), res);
+            },
         }
     }
 }
@@ -92,6 +159,30 @@ impl Lobby {
         let mut writer = self.auth_challenges.write().await;
         (*writer).insert(pid, int_auth_challenge.clone());
         return player_challenge;
+    }
+
+    pub async fn switch_or_join_team(&mut self, pid: PlayerId, team: &Team) -> Result<(), InvalidError> {
+        let tmp;
+        let result;
+        if self.game.get_player_team_from_id(&pid).is_some(){
+            tmp = self.game.transfer_player(&pid, team);
+            self.game = tmp.0;
+            result = tmp.1;
+        }
+        else{
+            let player = self.player_modem.get_simple_player(&pid.to_string()).await;
+            if player.is_none(){
+                result = Err(InvalidError::new("Invalid pid!"));
+            }
+            else{
+                tmp = self.game.add_player_to_team(player.unwrap(), team);
+                self.game = tmp.0;
+                result = tmp.1;
+            }
+        }
+        let msg = WSMessage::PlayerUpdate;
+        self.player_modem.broadcast(msg.into()).await;
+        return result;
     }
 
     pub async fn get_num_players(&self) -> usize {
@@ -184,6 +275,20 @@ impl Lobby {
         }
     }
 
+    /// Get game view based on player id.0
+    pub async fn get_player_full_game_view(
+        &self,
+        pid: &str,
+    ) -> Result<GameViewWrapper, NotAllowedError> {
+        if let Some(player) = self.player_modem.get_simple_player(&pid).await {
+            let res = self.game.get_full_game_info(&player);
+            if res.is_ok() {
+                return Ok(res.unwrap());
+            }
+        }
+        return Err(NotAllowedError::new("Not allowed"));
+    }
+
     pub async fn handle_tile_select_msg(&mut self, ws_id: &str, tile_num: u8) {
         if let Some(pid) = self.player_modem.get_ws_player_id(ws_id).await {
             if let Some(player) = self.player_modem.get_simple_player(&pid).await {
@@ -212,7 +317,7 @@ impl Lobby {
                                 self.move_update_id += 1;
                                 // Handle result states
                                 match move_result {
-                                    MoveResult::Win(ref team, ref reason) => {
+                                    MoveResult::Win(WinResult{ref team, ref reason}) => {
                                         let msg = WSMessage::TeamWinMessage {
                                             id: team.get_id(),
                                             reason: reason.to_string(),
