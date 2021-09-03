@@ -1,6 +1,8 @@
 pub mod filters {
 
     use super::handlers;
+    
+    
     use crate::web::db::{InMemGameDB, InMemSessionStore};
 
     use warp::filters::ws::ws;
@@ -38,6 +40,19 @@ pub mod filters {
             .and(with_db(db))
             .and(with_sess(sess))
             .and_then(handlers::create_player)
+    }
+
+    pub fn join_team(
+        db: InMemGameDB,
+        sess: InMemSessionStore,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::path!("lobby" / String / "players")
+            .and(warp::filters::cookie::cookie("SESSION_ID"))
+            .and(warp::filters::method::post())
+            .and(warp::body::json())
+            .and(with_db(db))
+            .and(with_sess(sess))
+            .and_then(handlers::add_player_to_team)
     }
 
     pub fn player_websockets(
@@ -84,6 +99,8 @@ pub mod filters {
 pub mod handlers {
 
     use crate::players::{Player, SimplePlayer};
+    use crate::web::responses::TeamChangeResponse;
+    use crate::web::requests::TeamChangeRequest;
     use crate::web::cookies::gen_auth_cookie;
     use crate::web::db::InMemGameDB;
     use crate::web::db::InMemSessionStore;
@@ -243,39 +260,38 @@ pub mod handlers {
         };
     }
 
-    pub fn add_player_to_team() {
-        todo!()
-        // let player = serde_json::from_str(json_data.as_ref());
+    pub async fn add_player_to_team(
+        lobby_id: String,
+        sess_id: String,
+        team_req: TeamChangeRequest,
+        db: InMemGameDB,
+        sess: InMemSessionStore) -> Result<impl warp::Reply, warp::Rejection> {
+        // Get player from session
+        let pid = match sess.get(&sess_id, "pid").await {
+            Some(p) => p,
+            None => {
+                eprintln!("no sess found");
+                return Err(warp::reject::not_found());
+            }
+        };
 
-        // if player.is_err() {
-        //     return String::from("Error: Invalid request");
-        // }
-        // let player = player.unwrap();
-        // match arc_game {
-        //     Ok(game) => {
-        //         println!("Creating player for: {}", lobby_id);
-        //         // println!("Creating player: {}", json_data);
-        //         match game.write() {
-        //             Ok(mut g) => {
-        //                 match &mut *g {
-        //                     GameWrapper::InitialGame(g0) => {
-        //                         g0.add_player_team_one(player);
-        //                     }
-        //                     GameWrapper::InProgressGame(g0) => {
-        //                         g0.add_player_team_one(player);
-        //                     }
-        //                 };
-        //                 return String::from("Ok");
-        //             }
-        //             Err(_e) => {
-        //                 return String::from("Error adding player");
-        //             }
-        //         }
-        //     }
-        //     Err(_e) => {
-        //         return String::from("Error adding player");
-        //     }
-        // }
+        // Get lobby.
+        let lobby_res = db.get_lobby(&lobby_id).await;
+        if lobby_res.is_err() {
+            return Err(warp::reject::not_found());
+        }
+        let lobby = lobby_res.unwrap();
+        let mut lobby_writer = lobby.write().await;
+        let add_result = (*lobby_writer).switch_or_join_team(pid.parse::<u32>().unwrap(), &team_req.team).await;
+        match add_result{
+            Ok(_) => {
+                return Ok(serde_json::to_string(&TeamChangeResponse{status: OpStatus::Ok}).unwrap_or(String::from("ok")));
+            },
+            Err(e) => {
+                eprintln!("Error add player to team: {:?}", e);
+                return Err(warp::reject::custom(TeamChangeResponse{status: OpStatus::Error}));
+            }
+        };
     }
 }
 

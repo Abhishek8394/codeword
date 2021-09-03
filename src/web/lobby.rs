@@ -1,5 +1,6 @@
 // use serde::{Serialize, Deserialize};
 use super::players::WebAppPlayer;
+use crate::game::Team;
 use crate::errors::InvalidError;
 use crate::game::FullGameInfoView;
 
@@ -80,6 +81,42 @@ impl GameWrapper {
             },
         }
     }
+
+    pub fn get_player_team_from_id(&self, pid: &PlayerId) -> Option<Team> {
+        match &self {
+            &GameWrapper::InitialGame(g) => g.get_player_team_from_id(pid),
+            &GameWrapper::InProgressGame(g) => g.get_player_team_from_id(pid),
+        }
+    }
+    
+    pub fn transfer_player(&self, pid: &PlayerId, team: &Team) -> (Self, Result<(), InvalidError>) {
+        let tmp = self.clone();
+        match tmp {
+            GameWrapper::InitialGame(mut g) => {
+                let res = g.transfer_player(pid, team);
+                return (GameWrapper::InitialGame(g), res);
+            },
+            GameWrapper::InProgressGame(mut g) => {
+                let res = g.transfer_player(pid, team);
+                
+                return (GameWrapper::InProgressGame(g), res);
+            },
+        }
+    }
+
+    pub fn add_player_to_team(&self, player: SimplePlayer, team: &Team) -> (Self, Result<(), InvalidError>) {
+        let tmp = self.clone();
+        match tmp {
+            GameWrapper::InitialGame(mut g) => {
+                let res = g.add_player_to_team(player, team);
+                return (GameWrapper::InitialGame(g), res);
+            },
+            GameWrapper::InProgressGame(mut g) => {
+                let res = g.add_player_to_team(player, team);
+                return (GameWrapper::InProgressGame(g), res);
+            },
+        }
+    }
 }
 
 // #[derive(Serialize, Deserialize)]
@@ -122,6 +159,30 @@ impl Lobby {
         let mut writer = self.auth_challenges.write().await;
         (*writer).insert(pid, int_auth_challenge.clone());
         return player_challenge;
+    }
+
+    pub async fn switch_or_join_team(&mut self, pid: PlayerId, team: &Team) -> Result<(), InvalidError> {
+        let tmp;
+        let result;
+        if self.game.get_player_team_from_id(&pid).is_some(){
+            tmp = self.game.transfer_player(&pid, team);
+            self.game = tmp.0;
+            result = tmp.1;
+        }
+        else{
+            let player = self.player_modem.get_simple_player(&pid.to_string()).await;
+            if player.is_none(){
+                result = Err(InvalidError::new("Invalid pid!"));
+            }
+            else{
+                tmp = self.game.add_player_to_team(player.unwrap(), team);
+                self.game = tmp.0;
+                result = tmp.1;
+            }
+        }
+        let msg = WSMessage::PlayerUpdate;
+        self.player_modem.broadcast(msg.into()).await;
+        return result;
     }
 
     pub async fn get_num_players(&self) -> usize {

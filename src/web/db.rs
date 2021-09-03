@@ -12,7 +12,7 @@ use crate::web::errors::DuplicateLobbyError;
 #[derive(Clone)]
 pub struct RedisGameDB {}
 
-type ArcLobbyWrapper = Arc<RwLock<Lobby>>;
+pub type ArcLobbyWrapper = Arc<RwLock<Lobby>>;
 
 #[derive(Clone)]
 pub struct InMemGameDB {

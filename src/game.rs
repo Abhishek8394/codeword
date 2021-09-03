@@ -4,14 +4,14 @@ use crate::board::{Board, MinimalBoardView, FullBoardView, PlayerView};
 use crate::errors::{InvalidError, InvalidMoveError};
 use crate::players::Player;
 use crate::players::PlayerId;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Display;
 
 static TARGET_SCORE: u8 = 0;
 
-#[derive(Debug, PartialEq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Team {
     TeamOne,
     TeamTwo,
@@ -175,6 +175,48 @@ impl<S: Clone, P: Player> Game<S, P> {
 
     pub fn add_player_team_two(&mut self, player: P) {
         self.team_two_players.insert(*player.get_id(), player);
+    }
+
+    pub fn add_player_to_team(&mut self, player: P, team: &Team) -> Result<(), InvalidError> {
+        if self.get_player_team(&player).is_some(){
+            return Err(InvalidError::new("Player already in a team! Cannot add again."));
+        }
+        match &team {
+            &Team::TeamOne => {
+                self.add_player_team_one(player);
+            },
+            &Team::TeamTwo => {
+                self.add_player_team_one(player);  
+            }
+        };
+        return Ok(())
+    }
+
+    pub fn transfer_player(&mut self, pid: &PlayerId, team: &Team) -> Result<(), InvalidError> {
+        if self.team_one_players.contains_key(pid){
+            if *team == Team::TeamOne{
+                return Ok(());
+            }
+            let player = self.team_one_players.remove(pid).unwrap();
+            if self.team_one_spymaster_ind.as_ref().map_or(false, |id| *id == *pid as usize){
+                self.team_one_spymaster_ind = None;
+            }
+            self.team_two_players.insert(pid.clone(), player);
+        }
+        else if self.team_two_players.contains_key(&pid){
+            if *team == Team::TeamTwo{
+                return Ok(());
+            }
+            let player = self.team_two_players.remove(pid).unwrap();
+            if self.team_two_spymaster_ind.as_ref().map_or(false, |id| *id == *pid as usize){
+                self.team_two_spymaster_ind = None;
+            }
+            self.team_one_players.insert(pid.clone(), player);
+        }
+        else{
+            return Err(InvalidError::new("Player doesnt belong anywhere"));
+        }
+        return Ok(());
     }
 
     pub fn set_team_one_spymaster(&mut self, ind: usize) -> Result<(), InvalidError> {
